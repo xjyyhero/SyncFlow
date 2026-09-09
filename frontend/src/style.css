@@ -1,0 +1,40 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #182b36;
+  background: #f5f7fa;
+  line-height: 1.6;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 760px;
+  margin: 10vh auto;
+  padding: 24px;
+}
+h1 {
+  font-size: clamp(2.5rem, 8vw, 4rem);
+  margin: 0;
+}
+h2 {
+  font-size: 1.25rem;
+}
+.eyebrow {
+  color: #46637a;
+  font-weight: 600;
+}
+section {
+  margin-top: 32px;
+  padding: 24px;
+  border: 1px solid #d8e0e8;
+  border-radius: 12px;
+  background: white;
+}
+a {
+  color: #165a98;
+  text-underline-offset: 4px;
+}
+a:focus-visible {
+  outline: 3px solid #165a98;
+  outline-offset: 4px;
+}
