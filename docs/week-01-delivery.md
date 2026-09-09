@@ -10,7 +10,7 @@
 | 4. MySQL/Redis 与开发库 | Compose 本地五服务，syncflow 开发数据库；实测记录见 review.md |
 | 5. 项目骨架、README、启动脚本 | [README](../README.md)、backend/、frontend/、docker/、scripts/start.sh |
 | 6. /healthz | 已实现并通过 HTTP 与 Docker 健康检查 |
-| 7. 首个分支与 PR | chore/week-01；关联 Issue #1，PR 提交后由 GitHub 展示 |
+| 7. 首个分支与 PR | `chore/week-01`；[Issue #1](https://github.com/xjyyhero/SyncFlow/issues/1)、[PR #2](https://github.com/xjyyhero/SyncFlow/pull/2)，已提交待人工审核 |
 | 8. 系统边界与核心流程图 | [技术设计](technical-design.md)，包含正常和主要异常分支 |
 | 9. API 设计 | [接口说明](api-design.md)、[OpenAPI 3.0.3](openapi.json) |
 | 10. MySQL 设计与状态机 | [数据库设计](database-design.md)、[SQL 附件](schema.sql)、[状态机](state-machine.md) |
