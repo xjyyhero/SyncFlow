@@ -1,0 +1,9 @@
+.git
+.env
+.DS_Store
+docs
+backend/.venv
+backend/.ruff_cache
+**/__pycache__
+frontend/node_modules
+frontend/dist
