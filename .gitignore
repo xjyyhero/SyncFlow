@@ -11,3 +11,5 @@ dist/
 # Original requirement documents are local-only.
 /docs/product-requirements.pdf
 /docs/week-01.pdf
+
+/docs/sources/*.pdf

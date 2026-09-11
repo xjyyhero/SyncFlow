@@ -2,7 +2,7 @@
 
 本周目标：理解需求、完成技术设计、搭建可运行的项目骨架，并走通首次 PR 交付流程。本周不要求完成 CSV 导入等完整业务功能。
 
-依据：[产品需求说明书](product-requirements.pdf)、[第 1 周任务文档](week-01.pdf)。
+依据：[产品需求说明书](../sources/product-requirements.pdf)、[第 1 周任务文档](../sources/week-01.pdf)。
 
 ## 一、需求理解
 
@@ -10,7 +10,7 @@
 - [x] 整理需求疑问清单，标注“待确认 / 已确认”，记录确认结论及依据。
 - [x] 整理业务名词表，统一任务、同步、幂等、Worker 等概念。
 
-产出见 [需求理解](requirements-understanding.md)；已完成需求整理，未明确的业务规则仍保留“待确认”。前五项实测记录见 [交付记录](week-01-first-five.md)。
+产出见 [需求理解](../requirements/requirements-understanding.md)；已完成需求整理，未明确的业务规则仍保留“待确认”。前五项实测记录见 [交付记录](week-01-first-five.md)。
 
 ## 二、技术设计
 

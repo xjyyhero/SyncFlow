@@ -5,18 +5,18 @@
 | 任务 | 产出与完成情况 |
 | --- | --- |
 | 1. 阅读 PRD | 已阅读 product-requirements.pdf；原文提到的 Markdown 源文件未提供，不伪造原始需求 |
-| 2. 名词、角色、核心流程 | [需求理解](requirements-understanding.md)、[角色与流程](roles-and-core-flow.md)、[CSV 样例](csv-format.md) |
+| 2. 名词、角色、核心流程 | [需求理解](../requirements/requirements-understanding.md)、[角色与流程](../requirements/roles-and-core-flow.md)、[CSV 样例](../requirements/csv-format.md) |
 | 3. 开发环境 | Python/FastAPI 虚拟环境，React/TypeScript/Vite/React Router；依赖锁定文件 |
 | 4. MySQL/Redis 与开发库 | Compose 本地五服务，syncflow 开发数据库；实测记录见 review.md |
-| 5. 项目骨架、README、启动脚本 | [README](../README.md)、backend/、frontend/、docker/、scripts/start.sh |
+| 5. 项目骨架、README、启动脚本 | [README](../../README.md)、backend/、frontend/、docker/、scripts/start.sh |
 | 6. /healthz | 已实现并通过 HTTP 与 Docker 健康检查 |
 | 7. 首个分支与 PR | `chore/week-01`；[Issue #1](https://github.com/xjyyhero/SyncFlow/issues/1)、[PR #2](https://github.com/xjyyhero/SyncFlow/pull/2)，已提交待人工审核 |
-| 8. 系统边界与核心流程图 | [技术设计](technical-design.md)，包含正常和主要异常分支 |
-| 9. API 设计 | [接口说明](api-design.md)、[OpenAPI 3.0.3](openapi.json) |
-| 10. MySQL 设计与状态机 | [数据库设计](database-design.md)、[SQL 附件](schema.sql)、[状态机](state-machine.md) |
-| 11. 异常与测试计划 | [测试计划与追溯矩阵](test-plan.md) |
+| 8. 系统边界与核心流程图 | [技术设计](../design/technical-design.md)，包含正常和主要异常分支 |
+| 9. API 设计 | [接口说明](../design/api-design.md)、[OpenAPI 3.0.3](../design/openapi.json) |
+| 10. MySQL 设计与状态机 | [数据库设计](../design/database-design.md)、[SQL 附件](../design/schema.sql)、[状态机](../design/state-machine.md) |
+| 11. 异常与测试计划 | [测试计划与追溯矩阵](../design/test-plan.md) |
 
-额外交付：[Web 页面设计](web-design.md)、[整体系统讲解](system-overview.md)、[AI 自查与验证记录](review.md)、[首页截图](images/week-01-home.png)。
+额外交付：[Web 页面设计](../design/web-design.md)、[整体系统讲解](../requirements/system-overview.md)、[AI 自查与验证记录](review.md)、[首页截图](../images/week-01-home.png)。
 
 ## 交付边界
 

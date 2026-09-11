@@ -150,13 +150,13 @@ MySQL 数据存放在 Docker 数据卷里，因此普通停止容器不会删除
 
 | 文件 | 需要能解释的内容 |
 | --- | --- |
-| [compose.yaml](../compose.yaml) | 五个服务如何启动、连接、映射端口和保存数据 |
-| [.env.example](../.env.example) | 配置项是什么意思，哪些目前只是预留 |
-| [main.py](../backend/app/main.py) | FastAPI 应用如何创建，一个请求如何得到响应 |
-| [worker.py](../backend/app/worker.py) | 后台进程如何保持运行、接收停止信号 |
-| [main.tsx](../frontend/src/main.tsx) | React 页面如何显示，路由如何匹配 |
-| [vite.config.ts](../frontend/vite.config.ts) | 前端开发服务如何把 `/api` 请求转发给后端 |
-| [start.sh](../scripts/start.sh) | 如何准备配置并统一启动服务 |
+| [compose.yaml](../../compose.yaml) | 五个服务如何启动、连接、映射端口和保存数据 |
+| [.env.example](../../.env.example) | 配置项是什么意思，哪些目前只是预留 |
+| [main.py](../../backend/app/main.py) | FastAPI 应用如何创建，一个请求如何得到响应 |
+| [worker.py](../../backend/app/worker.py) | 后台进程如何保持运行、接收停止信号 |
+| [main.tsx](../../frontend/src/main.tsx) | React 页面如何显示，路由如何匹配 |
+| [vite.config.ts](../../frontend/vite.config.ts) | 前端开发服务如何把 `/api` 请求转发给后端 |
+| [start.sh](../../scripts/start.sh) | 如何准备配置并统一启动服务 |
 
 建议从 `compose.yaml` 开始逐段阅读，它能把五个服务串起来，再继续看 API、Worker 和前端入口文件。
 
@@ -164,7 +164,7 @@ MySQL 数据存放在 Docker 数据卷里，因此普通停止容器不会删除
 
 AI 已执行的检查可以作为参考，但你仍需要亲手运行验证，并理解结果代表什么。
 
-- 按照 [README](../README.md) 运行启动命令。
+- 按照 [README](../../README.md) 运行启动命令。
 - 打开前端页面和 API，确认对应端口可以访问。
 - 查询开发数据库，确认连接成功且数据库存在。
 - 检查 Redis 的 PING 响应。
@@ -175,8 +175,8 @@ AI 已执行的检查可以作为参考，但你仍需要亲手运行验证，�
 
 ## 参考文档
 
-- [产品需求说明书](product-requirements.pdf)
-- [Week 1 任务文档](week-01.pdf)
+- [产品需求说明书](../sources/product-requirements.pdf)
+- [Week 1 任务文档](../sources/week-01.pdf)
 - [需求理解](requirements-understanding.md)
 - [用户角色与核心流程](roles-and-core-flow.md)
-- [前五项交付与验证记录](week-01-first-five.md)
+- [前五项交付与验证记录](../delivery/week-01-first-five.md)

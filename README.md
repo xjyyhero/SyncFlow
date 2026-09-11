@@ -2,7 +2,7 @@
 
 数据同步与任务管理服务：用户上传 CSV，系统异步导入数据，并提供任务状态、统计和错误明细查询。
 
-当前交付 Week 1 的需求与技术设计包、开发环境、五服务骨架及 `/healthz` 存活检查，完整任务对应关系见 [Week 1 交付索引](docs/week-01-delivery.md)。当前首页与 `/api/v1/info` 用于验证骨架，尚无 CSV 处理业务；Worker 仅支持启动与正常停止。
+当前交付 Week 1 的需求与技术设计包、开发环境、五服务骨架及 `/healthz` 存活检查，完整任务对应关系见 [Week 1 交付索引](docs/delivery/week-01-delivery.md)。当前首页与 `/api/v1/info` 用于验证骨架，尚无 CSV 处理业务；Worker 仅支持启动与正常停止。
 
 ## 技术栈与目录
 
@@ -18,17 +18,17 @@ compose.yaml       五服务编排
 .env.example       本地配置示例
 ```
 
-需求说明见 [需求理解](docs/requirements-understanding.md)，任务进度见 [完整交付索引](docs/week-01-delivery.md)。原始 PRD 为 [PDF](docs/product-requirements.pdf)，目前未提供任务原文提到的 `docs/01-product-requirements.md`，需求整理使用该 PDF。
+需求说明见 [需求理解](docs/requirements/requirements-understanding.md)，任务进度见 [完整交付索引](docs/delivery/week-01-delivery.md)
 
 ## 设计文档
 
-- [系统边界、流程与事务](docs/technical-design.md)
-- [API 说明](docs/api-design.md)与 [OpenAPI 契约](docs/openapi.json)
-- [数据库设计](docs/database-design.md)、[SQL 附件](docs/schema.sql)、[状态机](docs/state-machine.md)
-- [Web 页面](docs/web-design.md)、[异常与测试计划](docs/test-plan.md)
-- [AI 自查与验证记录](docs/review.md)
+全部文档按类别整理，见 [文档导航](docs/README.md)。
 
-上述业务设计为待审核提案；完整契约与运行服务自动生成的 OpenAPI 有意分开，避免展示未实现接口为可用功能。正常 CSV 示例位于 `samples/sample-valid.csv`。
+- [系统边界、流程与事务](docs/design/technical-design.md)
+- [API 说明](docs/design/api-design.md)与 [OpenAPI 契约](docs/design/openapi.json)
+- [数据库设计](docs/design/database-design.md)、[SQL 附件](docs/design/schema.sql)、[状态机](docs/design/state-machine.md)
+- [Web 页面](docs/design/web-design.md)、[异常与测试计划](docs/design/test-plan.md)
+- [AI 自查与验证记录](docs/delivery/review.md)
 
 ## 环境要求
 
@@ -70,7 +70,7 @@ docker compose down -v
 
 ## 配置与数据库
 
-`.env.example` 包含 Week 1 要求的全部配置项；复制后的 `.env` 不提交到 Git。示例密码仅用于本地开发。业务相关配置目前仅预留，后续实现时接入。
+`.env.example` 包含 Week 1 要求的全部配置项；示例密码仅用于本地开发。业务相关配置目前仅预留，后续实现时接入。
 
 Compose 首次初始化 MySQL 数据卷时自动创建 `MYSQL_DATABASE` 指定的数据库和 `MYSQL_USER` 用户。已有数据卷不会因修改这些配置而重新初始化。
 
@@ -144,5 +144,3 @@ backend/.venv/bin/python scripts/smoke.py
 ## 协作
 
 改动通过 Issue → 分支 → 本地检查 → PR → AI Code Review → 人工审核流程交付。本轮使用 `chore/week-01` 提交 Week 1 PR；AI 自查记录不替代人工最终审核，不自动合并。
-
-原始 `docs/product-requirements.pdf` 和 `docs/week-01.pdf` 仅保留在本地，按所有者要求不提交公开仓库。文档中的原始 PDF 链接仅在本地文件存在时可用。
