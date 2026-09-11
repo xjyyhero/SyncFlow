@@ -26,7 +26,7 @@
 
 ## 使用入口
 
-按照 [README](../README.md) 启动和验证。后端技术栈沿用已有 README 的 Python + FastAPI 选择。
+按照 [README](../../README.md) 启动和验证。后端技术栈沿用已有 README 的 Python + FastAPI 选择。
 
 ## 已知范围限制
 

@@ -1,6 +1,6 @@
 # SyncFlow 需求理解
 
-依据：[产品需求说明书](product-requirements.pdf)（以下简称 PRD）和 [Week 1 任务文档](week-01.pdf)。
+依据：[产品需求说明书](../sources/product-requirements.pdf)（以下简称 PRD）和 [Week 1 任务文档](../sources/week-01.pdf)。
 
 本文整理需求，不代表业务功能已经实现。“已确认”指原文有明确依据；“待确认”不作为既定实现规则，后续以对应周任务文档或需求方明确答复为准。
 
@@ -8,7 +8,7 @@
 
 2026-09-09 补充：用户提供 `sample-valid.csv`，已确认示例包含 `external_id,name,amount,record_date` 四列及五条数据。详细观察与尚待确认的校验规则见 [CSV 示例与字段说明](csv-format.md)。
 
-本周设计阶段已为待确认问题提出可评审方案，见 [技术设计 D01–D08](technical-design.md)。疑问仍保持待确认；提案供 API、SQL、状态机和测试对齐，不代表需求方已批准。
+本周设计阶段已为待确认问题提出可评审方案，见 [技术设计 D01–D08](../design/technical-design.md)。疑问仍保持待确认；提案供 API、SQL、状态机和测试对齐，不代表需求方已批准。
 
 ## 1. 项目目标
 
