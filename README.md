@@ -2,7 +2,7 @@
 
 数据同步与任务管理服务：用户上传 CSV，系统异步导入数据，并提供任务状态、统计和错误明细查询。
 
-已完成 Week 2 MySQL 三表初始化、连接、数据访问层、统一响应/参数校验模块和 HTTP/数据库测试；创建任务 API 已支持文件保存、SHA-256、入库与 Redis 投递；任务列表和详情查询已接入真实数据库；最小 Worker 已接入 Redis 消费并模拟完成任务。此前交付 Week 1 的需求与技术设计包、开发环境、五服务骨架及 `/healthz` 存活检查，完整任务对应关系见 [Week 1 交付索引](docs/delivery/week-01-delivery.md)。本 PR 保留 Week 1 前端骨架，React 查询页面另行交付；CSV 解析尚未实现；Worker 会检查上传文件可读性，再将任务更新为 SUCCESS。
+已完成 Week 2 MySQL 三表初始化、连接、数据访问层、统一响应/参数校验模块和 HTTP/数据库测试；创建任务 API 已支持文件保存、SHA-256、入库与 Redis 投递；任务列表和详情查询已接入真实数据库；最小 Worker 已接入 Redis 消费并模拟完成任务。此前交付 Week 1 的需求与技术设计包、开发环境、五服务骨架及 `/healthz` 存活检查，完整任务对应关系见 [Week 1 交付索引](docs/delivery/week-01-delivery.md)。React 查询页面已接入真实 API，支持列表、筛选、分页、详情和创建；CSV 解析尚未实现；Worker 会检查上传文件可读性，再将任务更新为 SUCCESS。
 
 ## 技术栈与目录
 
@@ -163,7 +163,7 @@ python3 scripts/review-db.py
 
 ## 协作
 
-改动通过 Issue → 分支 → 本地检查 → PR → AI Code Review → 人工审核流程交付。本轮使用 `feature/week2-backend-api-worker` 提交 Week 2 后端 PR；AI 自查记录不替代人工最终审核，不自动合并。
+改动通过 Issue → 分支 → 本地检查 → PR → AI Code Review → 人工审核流程交付。后端通过 `feature/week2-backend-api-worker` 交付；前端通过 `feature/week2-react-job-pages` 交付；AI 自查记录不替代人工最终审核，不自动合并。
 
 ## 创建任务
 
@@ -191,3 +191,13 @@ curl 'http://127.0.0.1:8000/api/v1/jobs/任务ID'
 ```
 
 详情包含公开任务字段、记录统计、最近错误和 UTC 时间；内部存储路径不返回。任务不存在返回 404 JOB_NOT_FOUND。列表支持四种状态筛选，page_size 最大 100，非法参数返回 400 INVALID_REQUEST。空页返回空数组及正确的 meta.total。详见 [任务查询交付记录](docs/delivery/week-02-pr1.md)。
+
+## React 任务页面
+
+访问 http://127.0.0.1:5173/ 查看任务列表，`/jobs/:jobId` 查看详情，`/jobs/new` 上传创建。筛选、分页同步 URL，时间使用浏览器本地时区。
+
+前端单元测试使用 Node 原生 TypeScript 类型擦除，推荐 Node 24（与 Docker 镜像一致）。执行 `node --test frontend/src/api.test.ts`；`sh scripts/check.sh` 同时运行这些测试、类型检查和生产构建。
+
+完整服务启动后，运行 `python3 scripts/acceptance-e2e.py` 经 Web 代理创建验收任务并等待 SUCCESS。每次执行会在开发库新增一条带时间戳的验收任务，并保留上传文件；隔离后端测试仍使用独立测试数据库。
+
+[PR 2 交付、截图与验收记录](docs/delivery/week-02-pr2.md)。
