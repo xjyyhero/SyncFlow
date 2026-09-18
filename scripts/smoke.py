@@ -1,6 +1,7 @@
 """Run after scripts/start.sh: verify Web, API, proxy and Worker shutdown."""
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,6 +26,11 @@ worker = subprocess.Popen(
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
     text=True,
+    env={
+        **os.environ,
+        "REDIS_ADDR": "127.0.0.1:1",
+        "REDIS_JOB_QUEUE": "syncflow:smoke:unused",
+    },
 )
 try:
     # communicate's timeout also bounds startup, so a broken worker cannot hang this check.
@@ -35,7 +41,7 @@ try:
         worker.terminate()
     _, logs = worker.communicate(timeout=5)
     assert worker.returncode == 0, logs
-    assert "Skeleton started" in logs and "Stopped" in logs, logs
+    assert "Worker started" in logs and "Stopped" in logs, logs
 finally:
     if worker.poll() is None:
         worker.kill()

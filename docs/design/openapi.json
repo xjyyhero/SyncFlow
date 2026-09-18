@@ -1,27 +1,64 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
-    "title": "SyncFlow API 设计提案",
-    "version": "0.1.0-design",
-    "description": "Week 1 评审契约；仅 /healthz 和 /api/v1/info 已实现，其他接口计划实现。JSON业务成功用data/meta，失败用error；健康检查及CSV下载为显式例外。日期时间UTC，业务日期不带时区。"
+    "title": "SyncFlow",
+    "version": "0.2.0"
   },
-  "servers": [
-    {
-      "url": "http://localhost:8000"
-    }
-  ],
   "paths": {
     "/healthz": {
       "get": {
-        "operationId": "healthz",
-        "summary": "已实现：进程存活检查，不访问 MySQL/Redis",
+        "summary": "Healthz",
+        "description": "Report process liveness without checking database or queue availability.",
+        "operationId": "healthz_healthz_get",
         "responses": {
           "200": {
-            "description": "API 进程可响应",
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Health"
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_REQUEST",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "value": {
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "请求参数不合法",
+                        "details": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "value": {
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "服务内部错误，请稍后重试",
+                        "details": []
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -31,15 +68,139 @@
     },
     "/api/v1/info": {
       "get": {
-        "operationId": "projectInfo",
-        "summary": "已实现：项目骨架信息",
+        "summary": "Project Info",
+        "operationId": "project_info_api_v1_info_get",
         "responses": {
           "200": {
-            "description": "项目名称和阶段",
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Info"
+                  "$ref": "#/components/schemas/SuccessResponse_dict_str__str__"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_REQUEST",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "value": {
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "请求参数不合法",
+                        "details": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "value": {
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "服务内部错误，请稍后重试",
+                        "details": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "summary": "Readyz",
+        "description": "Check MySQL connectivity; keep internal errors out of HTTP responses.",
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_REQUEST",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "value": {
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "请求参数不合法",
+                        "details": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "value": {
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "服务内部错误，请稍后重试",
+                        "details": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "DATABASE_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "DATABASE_UNAVAILABLE": {
+                    "value": {
+                      "error": {
+                        "code": "DATABASE_UNAVAILABLE",
+                        "message": "数据库暂不可用",
+                        "details": []
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -49,145 +210,65 @@
     },
     "/api/v1/jobs": {
       "post": {
+        "summary": "创建任务",
+        "description": "校验并保存 CSV、提交 PENDING 任务并投递 Redis，不等待 Worker。默认限制 10 MiB，扩展名大小写不敏感。投递失败记录任务错误并返回 500。",
         "operationId": "createJob",
-        "summary": "计划 V1.0 创建任务；V1.1 支持幂等键",
-        "description": "流式文件预检后保存文件及 QUEUED 任务，202 不等待 Worker。multipart 上限按文件字节10 MiB计算；最多10000个非空数据记录。业务规则为待审核提案。",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "description": "V1.1 可选 ASCII 可见字符键，TTL 24h；同键同摘要重放200，冲突409。",
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128,
-              "pattern": "^[!-~]+$"
-            }
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "file": {
-                    "type": "string",
-                    "format": "binary"
-                  }
-                },
-                "required": [
-                  "file"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/Body_createJob"
               }
             }
           }
         },
         "responses": {
-          "202": {
-            "description": "新任务已持久化，可能等待队列补投",
+          "201": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/JobResponse"
+                  "$ref": "#/components/schemas/SuccessResponse_JobCreated_"
                 }
               }
             }
           },
-          "200": {
-            "description": "V1.1 幂等重放原任务",
+          "400": {
+            "description": "INVALID_REQUEST, INVALID_FILE_EXTENSION, FILE_TOO_LARGE",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobResponse"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "FILE_TOO_LARGE",
-            "content": {
-              "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "value": {
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "请求参数不合法",
+                        "details": []
+                      }
+                    }
+                  },
+                  "INVALID_FILE_EXTENSION": {
+                    "value": {
+                      "error": {
+                        "code": "INVALID_FILE_EXTENSION",
+                        "message": "仅支持 CSV 文件",
+                        "details": []
+                      }
+                    }
+                  },
+                  "FILE_TOO_LARGE": {
+                    "value": {
+                      "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "文件超过大小限制",
+                        "details": []
+                      }
+                    }
+                  }
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "FILE_TOO_LARGE",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "UNSUPPORTED_MEDIA_TYPE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "UNSUPPORTED_MEDIA_TYPE",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "VALIDATION_ERROR, EMPTY_FILE, INVALID_HEADER, INVALID_CSV, INVALID_ENCODING, TOO_MANY_RECORDS",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "IDEMPOTENCY_CONFLICT",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "IDEMPOTENCY_CONFLICT",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SERVICE_UNAVAILABLE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "SERVICE_UNAVAILABLE",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
                 }
               }
             }
@@ -196,15 +277,19 @@
             "description": "INTERNAL_ERROR",
             "content": {
               "application/json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "value": {
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "服务内部错误，请稍后重试",
+                        "details": []
+                      }
+                    }
+                  }
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "INTERNAL_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
                 }
               }
             }
@@ -212,78 +297,84 @@
         }
       },
       "get": {
+        "summary": "查询任务列表",
+        "description": "支持 page（默认 1）、page_size（默认 20，最大 100）与状态筛选；按 created_at DESC, id DESC 排序。返回公开任务字段及 page/page_size/total。",
         "operationId": "listJobs",
-        "summary": "计划 V1.0 分页查询任务",
-        "description": "按 created_at DESC,job_id DESC 排序。",
         "parameters": [
           {
             "name": "page",
             "in": "query",
+            "required": false,
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "default": 1
+              "default": 1,
+              "title": "Page"
             }
           },
           {
             "name": "page_size",
             "in": "query",
+            "required": false,
             "schema": {
               "type": "integer",
-              "minimum": 1,
               "maximum": 100,
-              "default": 20
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
             }
           },
           {
             "name": "status",
             "in": "query",
+            "required": false,
             "schema": {
-              "$ref": "#/components/schemas/Status"
+              "anyOf": [
+                {
+                  "enum": [
+                    "PENDING",
+                    "RUNNING",
+                    "SUCCESS",
+                    "FAILED"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "任务分页",
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/JobList"
+                  "$ref": "#/components/schemas/JobListResponse"
                 }
               }
             }
           },
-          "422": {
-            "description": "VALIDATION_ERROR",
+          "400": {
+            "description": "INVALID_REQUEST",
             "content": {
               "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "value": {
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "请求参数不合法",
+                        "details": []
+                      }
+                    }
+                  }
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SERVICE_UNAVAILABLE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "SERVICE_UNAVAILABLE",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
                 }
               }
             }
@@ -292,15 +383,19 @@
             "description": "INTERNAL_ERROR",
             "content": {
               "application/json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "value": {
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "服务内部错误，请稍后重试",
+                        "details": []
+                      }
+                    }
+                  }
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "INTERNAL_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
                 }
               }
             }
@@ -309,577 +404,53 @@
       }
     },
     "/api/v1/jobs/{job_id}": {
-      "parameters": [
-        {
-          "name": "job_id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      ],
       "get": {
+        "summary": "查询任务详情",
+        "description": "返回任务公开字段、统计与 UTC 时间；不包含内部存储路径。不存在返回 JOB_NOT_FOUND。",
         "operationId": "getJob",
-        "summary": "计划 V1.0 任务详情",
-        "responses": {
-          "200": {
-            "description": "任务及统计",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "JOB_NOT_FOUND",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "JOB_NOT_FOUND",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "VALIDATION_ERROR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SERVICE_UNAVAILABLE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "SERVICE_UNAVAILABLE",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "INTERNAL_ERROR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "INTERNAL_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/jobs/{job_id}/errors": {
-      "parameters": [
-        {
-          "name": "job_id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      ],
-      "get": {
-        "operationId": "listJobErrors",
-        "summary": "计划 V1.0 错误明细，按 row_number 升序",
         "parameters": [
           {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "default": 1
-            }
-          },
-          {
-            "name": "page_size",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "分页结果",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorList"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "JOB_NOT_FOUND",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "JOB_NOT_FOUND",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "VALIDATION_ERROR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SERVICE_UNAVAILABLE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "SERVICE_UNAVAILABLE",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "INTERNAL_ERROR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "INTERNAL_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/jobs/{job_id}/attempts": {
-      "parameters": [
-        {
-          "name": "job_id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      ],
-      "get": {
-        "operationId": "listAttempts",
-        "summary": "计划 V1.1 执行记录，按 attempt_no 升序",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "default": 1
-            }
-          },
-          {
-            "name": "page_size",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "分页结果",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AttemptList"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "JOB_NOT_FOUND",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "JOB_NOT_FOUND",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "VALIDATION_ERROR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SERVICE_UNAVAILABLE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "SERVICE_UNAVAILABLE",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "INTERNAL_ERROR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "INTERNAL_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/jobs/{job_id}/cancel": {
-      "parameters": [
-        {
-          "name": "job_id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      ],
-      "post": {
-        "operationId": "cancelJob",
-        "summary": "计划 V1.1 取消任务",
-        "description": "QUEUED/RETRY_WAIT 立即取消200；RUNNING设置标记返回202；已CANCELLED返回200；其他终态409。",
-        "responses": {
-          "200": {
-            "description": "已经取消",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobResponse"
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "已请求取消，等待批次边界",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "JOB_NOT_FOUND",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "JOB_NOT_FOUND",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "JOB_NOT_CANCELLABLE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "JOB_NOT_CANCELLABLE",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "VALIDATION_ERROR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SERVICE_UNAVAILABLE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "SERVICE_UNAVAILABLE",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "INTERNAL_ERROR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "INTERNAL_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/jobs/{job_id}/export": {
-      "parameters": [
-        {
-          "name": "job_id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      ],
-      "get": {
-        "operationId": "exportJob",
-        "summary": "计划 V1.1 导出终态任务结果",
-        "description": "终态（包括FAILED/CANCELLED）可导出已提交记录。UTF-8 CSV 流式下载，文件响应不使用 JSON 包裹。records列为external_id,name,amount,record_date；errors列为row_number,code,message,field。电子表格危险文本前缀进行安全转义。",
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "query",
+            "name": "job_id",
+            "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "enum": [
-                "records",
-                "errors"
-              ]
-            }
+              "minLength": 1,
+              "maxLength": 36,
+              "description": "UUID 或 ULID 任务标识",
+              "title": "Job Id"
+            },
+            "description": "UUID 或 ULID 任务标识"
           }
         ],
         "responses": {
           "200": {
-            "description": "CSV 文件；没有记录时只有表头。",
-            "headers": {
-              "Content-Disposition": {
-                "schema": {
-                  "type": "string"
-                },
-                "description": "attachment; filename=\"records.csv\" 或 errors.csv"
-              }
-            },
+            "description": "Successful Response",
             "content": {
-              "text/csv": {
+              "application/json": {
                 "schema": {
-                  "type": "string",
-                  "format": "binary"
+                  "$ref": "#/components/schemas/SuccessResponse_JobDetail_"
                 }
               }
             }
           },
-          "404": {
-            "description": "JOB_NOT_FOUND",
+          "400": {
+            "description": "INVALID_REQUEST",
             "content": {
               "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "value": {
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "请求参数不合法",
+                        "details": []
+                      }
+                    }
+                  }
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "JOB_NOT_FOUND",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "JOB_NOT_FINISHED",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "JOB_NOT_FINISHED",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "VALIDATION_ERROR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "SERVICE_UNAVAILABLE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "SERVICE_UNAVAILABLE",
-                    "message": "请求无法完成",
-                    "details": []
-                  }
                 }
               }
             }
@@ -888,15 +459,40 @@
             "description": "INTERNAL_ERROR",
             "content": {
               "application/json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "value": {
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "服务内部错误，请稍后重试",
+                        "details": []
+                      }
+                    }
+                  }
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": {
-                    "code": "INTERNAL_ERROR",
-                    "message": "请求无法完成",
-                    "details": []
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "JOB_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "JOB_NOT_FOUND": {
+                    "value": {
+                      "error": {
+                        "code": "JOB_NOT_FOUND",
+                        "message": "任务不存在",
+                        "details": []
+                      }
+                    }
                   }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -907,442 +503,458 @@
   },
   "components": {
     "schemas": {
-      "Status": {
-        "type": "string",
-        "enum": [
-          "QUEUED",
-          "RUNNING",
-          "SUCCESS",
-          "PARTIAL_SUCCESS",
-          "FAILED",
-          "RETRY_WAIT",
-          "CANCELLED"
-        ]
-      },
-      "Meta": {
-        "type": "object",
-        "properties": {},
-        "additionalProperties": false
-      },
-      "PageMeta": {
-        "type": "object",
+      "Body_createJob": {
         "properties": {
-          "page": {
-            "type": "integer",
-            "minimum": 1
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "CSV 文件，默认不超过 10 MiB"
           },
-          "page_size": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100
-          },
-          "total": {
-            "type": "integer",
-            "minimum": 0
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "不传时由系统生成任务名称"
           }
         },
-        "required": [
-          "page",
-          "page_size",
-          "total"
-        ],
-        "additionalProperties": false
-      },
-      "ErrorDetail": {
         "type": "object",
-        "properties": {
-          "field": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
         "required": [
-          "field",
-          "message"
+          "file"
         ],
-        "additionalProperties": false
+        "title": "Body_createJob"
       },
-      "Error": {
-        "type": "object",
+      "ErrorBody": {
         "properties": {
           "code": {
             "type": "string",
-            "pattern": "^[A-Z][A-Z0-9_]*$"
+            "title": "Code"
           },
           "message": {
-            "type": "string"
+            "type": "string",
+            "title": "Message"
           },
           "details": {
-            "type": "array",
             "items": {
               "$ref": "#/components/schemas/ErrorDetail"
-            }
+            },
+            "type": "array",
+            "title": "Details"
           }
         },
+        "type": "object",
         "required": [
           "code",
           "message",
           "details"
         ],
-        "additionalProperties": false
+        "title": "ErrorBody"
       },
-      "ErrorResponse": {
-        "type": "object",
+      "ErrorDetail": {
         "properties": {
-          "error": {
-            "$ref": "#/components/schemas/Error"
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
           }
         },
+        "type": "object",
+        "required": [
+          "field",
+          "message"
+        ],
+        "title": "ErrorDetail"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "type": "object",
         "required": [
           "error"
         ],
-        "additionalProperties": false
+        "title": "ErrorResponse"
       },
-      "TaskError": {
-        "type": "object",
+      "HTTPValidationError": {
         "properties": {
-          "code": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "message"
-        ],
-        "additionalProperties": false
-      },
-      "Job": {
-        "type": "object",
-        "properties": {
-          "job_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "filename": {
-            "type": "string",
-            "maxLength": 255
-          },
-          "status": {
-            "$ref": "#/components/schemas/Status"
-          },
-          "total_count": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "processed_count": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "success_count": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "failed_count": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "attempt_count": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "cancel_requested": {
-            "type": "boolean"
-          },
-          "next_retry_at": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "started_at": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "finished_at": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "last_error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string"
-              },
-              "message": {
-                "type": "string"
-              }
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
             },
-            "required": [
-              "code",
-              "message"
-            ],
-            "additionalProperties": false,
-            "nullable": true
+            "type": "array",
+            "title": "Detail"
           }
         },
-        "required": [
-          "job_id",
-          "filename",
-          "status",
-          "total_count",
-          "processed_count",
-          "success_count",
-          "failed_count",
-          "attempt_count",
-          "cancel_requested",
-          "next_retry_at",
-          "started_at",
-          "finished_at",
-          "created_at",
-          "updated_at",
-          "last_error"
-        ],
-        "additionalProperties": false
-      },
-      "RowError": {
         "type": "object",
-        "properties": {
-          "row_number": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "code": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "field": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "row_number",
-          "code",
-          "message",
-          "field"
-        ],
-        "additionalProperties": false
+        "title": "HTTPValidationError"
       },
-      "Attempt": {
-        "type": "object",
-        "properties": {
-          "attempt_no": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "outcome": {
-            "type": "string",
-            "enum": [
-              "RUNNING",
-              "SUCCESS",
-              "PARTIAL_SUCCESS",
-              "FAILED",
-              "CANCELLED"
-            ]
-          },
-          "error_code": {
-            "type": "string",
-            "nullable": true
-          },
-          "error_message": {
-            "type": "string",
-            "nullable": true
-          },
-          "started_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "finished_at": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "attempt_no",
-          "outcome",
-          "error_code",
-          "error_message",
-          "started_at",
-          "finished_at",
-          "created_at",
-          "updated_at"
-        ],
-        "additionalProperties": false
-      },
-      "Record": {
-        "type": "object",
-        "properties": {
-          "external_id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
-          },
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 255
-          },
-          "amount": {
-            "type": "string",
-            "pattern": "^[0-9]{1,10}\\.[0-9]{2}$",
-            "example": "19.90",
-            "description": "Exact decimal string, never JSON float; input CSV allows 0, 1 or 2 fractional digits."
-          },
-          "record_date": {
-            "type": "string",
-            "format": "date",
-            "example": "2026-01-01"
-          }
-        },
-        "required": [
-          "external_id",
-          "name",
-          "amount",
-          "record_date"
-        ],
-        "additionalProperties": false
-      },
-      "Health": {
-        "type": "object",
+      "HealthResponse": {
         "properties": {
           "status": {
             "type": "string",
-            "enum": [
-              "ok"
-            ]
+            "const": "ok",
+            "title": "Status"
           }
         },
+        "type": "object",
         "required": [
           "status"
         ],
-        "additionalProperties": false
+        "title": "HealthResponse"
       },
-      "Info": {
-        "type": "object",
+      "JobCreated": {
         "properties": {
-          "data": {
-            "type": "object",
-            "properties": {
-              "name": {
+          "id": {
+            "type": "string",
+            "maxLength": 36,
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 128,
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "RUNNING",
+              "SUCCESS",
+              "FAILED"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "created_at"
+        ],
+        "title": "JobCreated"
+      },
+      "JobDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 36,
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 128,
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "RUNNING",
+              "SUCCESS",
+              "FAILED"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "source_file_name": {
+            "type": "string",
+            "title": "Source File Name"
+          },
+          "total_records": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Records"
+          },
+          "success_records": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Success Records"
+          },
+          "failed_records": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Failed Records"
+          },
+          "retry_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Retry Count"
+          },
+          "last_error_code": {
+            "anyOf": [
+              {
                 "type": "string"
               },
-              "stage": {
-                "type": "string"
+              {
+                "type": "null"
               }
-            },
-            "required": [
-              "name",
-              "stage"
             ],
-            "additionalProperties": false
+            "title": "Last Error Code"
           },
-          "meta": {
-            "$ref": "#/components/schemas/Meta"
+          "last_error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error Message"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
           }
         },
-        "required": [
-          "data",
-          "meta"
-        ],
-        "additionalProperties": false
-      },
-      "JobResponse": {
         "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "created_at",
+          "source_file_name",
+          "total_records",
+          "success_records",
+          "failed_records",
+          "retry_count",
+          "last_error_code",
+          "last_error_message",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "JobDetail"
+      },
+      "JobListResponse": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/Job"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/Meta"
-          }
-        },
-        "required": [
-          "data",
-          "meta"
-        ],
-        "additionalProperties": false
-      },
-      "JobList": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Job"
-            }
+              "$ref": "#/components/schemas/JobDetail"
+            },
+            "type": "array",
+            "title": "Data"
           },
           "meta": {
             "$ref": "#/components/schemas/PageMeta"
           }
         },
+        "type": "object",
         "required": [
           "data",
           "meta"
         ],
-        "additionalProperties": false
+        "title": "JobListResponse"
       },
-      "ErrorList": {
-        "type": "object",
+      "PageMeta": {
         "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RowError"
-            }
+          "page": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Page"
           },
-          "meta": {
-            "$ref": "#/components/schemas/PageMeta"
+          "page_size": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Page Size"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total"
           }
         },
-        "required": [
-          "data",
-          "meta"
-        ],
-        "additionalProperties": false
-      },
-      "AttemptList": {
         "type": "object",
+        "required": [
+          "page",
+          "page_size",
+          "total"
+        ],
+        "title": "PageMeta"
+      },
+      "ReadyResponse": {
         "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Attempt"
-            }
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status"
           },
-          "meta": {
-            "$ref": "#/components/schemas/PageMeta"
+          "checks": {
+            "additionalProperties": {
+              "type": "string",
+              "const": "ok"
+            },
+            "type": "object",
+            "title": "Checks"
           }
         },
+        "type": "object",
+        "required": [
+          "status",
+          "checks"
+        ],
+        "title": "ReadyResponse"
+      },
+      "SuccessResponse_JobCreated_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/JobCreated"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "type": "object",
         "required": [
           "data",
           "meta"
         ],
-        "additionalProperties": false
+        "title": "SuccessResponse[JobCreated]"
+      },
+      "SuccessResponse_JobDetail_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/JobDetail"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "SuccessResponse[JobDetail]"
+      },
+      "SuccessResponse_dict_str__str__": {
+        "properties": {
+          "data": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Data"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "SuccessResponse[dict[str, str]]"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
       }
     }
   }

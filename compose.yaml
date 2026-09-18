@@ -19,6 +19,17 @@ services:
       retries: 30
       start_period: 30s
 
+  mysql-init:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: runtime
+    env_file: .env
+    command: ["python", "-m", "app.database"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   redis:
     image: redis:7-alpine
     ports:
@@ -33,12 +44,19 @@ services:
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
+      target: runtime
     env_file: .env
+    environment:
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads:/app/uploads
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
       mysql:
         condition: service_healthy
+      mysql-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -51,11 +69,18 @@ services:
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
+      target: runtime
     env_file: .env
+    environment:
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads:/app/uploads:ro
     command: ["python", "-m", "app.worker"]
     depends_on:
       mysql:
         condition: service_healthy
+      mysql-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     stop_grace_period: ${WORKER_SHUTDOWN_TIMEOUT_SECONDS:-30}s
@@ -74,3 +99,4 @@ services:
 
 volumes:
   mysql_data:
+  uploads:
