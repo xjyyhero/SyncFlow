@@ -1,4 +1,19 @@
-# MySQL 数据库设计（待审核提案）
+# MySQL 数据库设计
+
+## Week 2 当前实现
+
+当前执行结构以 [backend/app/schema.sql](../../backend/app/schema.sql) 为准，创建 `sync_jobs`、`sync_records`、`sync_errors` 三张表，严格采用 Week 2 字段命名与四种任务状态。下方 Week 1 长期提案不是当前执行脚本。
+
+- 初始化：`python -m app.database`（在 backend 目录且已配置环境变量时）；Compose 通过 `mysql-init` 服务在 API 与 Worker 启动前执行。
+- 脚本使用 `CREATE TABLE IF NOT EXISTS`，重复执行保留已有数据；不修改已有同名表结构，后续结构升级需要新增 ALTER 迁移。MySQL DDL 隐式提交，初始化失败可修复后重跑。
+- 连接统一配置 `utf8mb4`、严格 SQL 模式与 UTC 会话时区，时间精度为毫秒。连接上下文成功提交、失败回滚、退出关闭连接；数据访问方法不自行提交，调用方可组合原子事务。
+- 金额使用 `DECIMAL(12,2)`；成功记录业务标识用区分大小写的排序规则和大写检查约束，后续 CSV 写入方需先转大写。同一任务内 `(job_id, external_id)` 唯一。
+- 索引为任务表 `(status, created_at)`、`(created_at)`，成功记录表 `(job_id)` 及上述唯一约束，错误表 `(job_id, row_number)`。InnoDB 二级索引包含主键，支持列表按创建时间与 ID 稳定排序。
+- `repository.py` 提供创建、详情、筛选分页、开始、完成、失败和错误记录方法；失败状态与文件级错误记录可在同一事务提交。数据访问层返回内部行，后续 API 必须显式选择公开字段，不能原样序列化内部存储路径。
+- `/healthz` 仅检查进程；`/readyz` 检查 MySQL 连接，失败返回 503 和固定错误，不暴露连接信息。此检查不代表 Redis 或业务表结构就绪。
+- 独立集成测试使用 `compose.test.yaml`，独立项目、用户及 `syncflow_test` 数据库，临时存储，不映射端口、不挂载开发数据卷、不读取 `.env`。运行 `sh scripts/test-db.sh`。
+
+## Week 1 长期设计提案（历史保留）
 
 完整字段、类型、非空性、默认值和约束见 [schema.sql](schema.sql)。SQL 是设计附件，不会由启动脚本自动应用；没有宣称已完成业务迁移。
 

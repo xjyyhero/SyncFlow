@@ -11,3 +11,5 @@
 建议先读需求理解和整体系统讲解，再看技术设计；验收时从交付索引进入。
 
 原始 PDF 的链接只有本地资料存在时可用。CSV 样例仍位于项目根目录的 [samples/sample-valid.csv](../samples/sample-valid.csv)。启动与操作说明见 [项目 README](../README.md)。
+
+Week 2 后端交付：[PR 1 说明与验收](delivery/week-02-pr1.md)。

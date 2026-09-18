@@ -2,14 +2,14 @@
 
 数据同步与任务管理服务：用户上传 CSV，系统异步导入数据，并提供任务状态、统计和错误明细查询。
 
-当前交付 Week 1 的需求与技术设计包、开发环境、五服务骨架及 `/healthz` 存活检查，完整任务对应关系见 [Week 1 交付索引](docs/delivery/week-01-delivery.md)。当前首页与 `/api/v1/info` 用于验证骨架，尚无 CSV 处理业务；Worker 仅支持启动与正常停止。
+已完成 Week 2 MySQL 三表初始化、连接、数据访问层、统一响应/参数校验模块和 HTTP/数据库测试；创建任务 API 已支持文件保存、SHA-256、入库与 Redis 投递；任务列表和详情查询已接入真实数据库；最小 Worker 已接入 Redis 消费并模拟完成任务。此前交付 Week 1 的需求与技术设计包、开发环境、五服务骨架及 `/healthz` 存活检查，完整任务对应关系见 [Week 1 交付索引](docs/delivery/week-01-delivery.md)。本 PR 保留 Week 1 前端骨架，React 查询页面另行交付；CSV 解析尚未实现；Worker 会检查上传文件可读性，再将任务更新为 SUCCESS。
 
 ## 技术栈与目录
 
 后端使用 Python 3.13 + FastAPI + Uvicorn；前端使用 React、TypeScript、Vite、React Router；数据服务使用 MySQL 8.4 和 Redis 7，统一由 Docker Compose 启动。
 
 ```text
-backend/app/       API 与 Worker 骨架
+backend/app/       API 与 Worker
 frontend/src/      React 页面与样式
 docker/            前后端 Dockerfile
 scripts/           统一启动与检查脚本
@@ -52,7 +52,7 @@ sh scripts/start.sh
 - API 骨架信息：http://localhost:8000/api/v1/info
 - API 存活检查：http://localhost:8000/healthz
 
-`GET /healthz` 返回 HTTP 200 和 `{"status":"ok"}`，仅检查 API 进程能否响应，不连接 MySQL 或 Redis。Docker 使用该接口检查 API 存活；依赖就绪检查 `/readyz` 尚未实现。
+`GET /healthz` 返回 HTTP 200 和 `{"status":"ok"}`，仅检查 API 进程能否响应，不连接 MySQL 或 Redis。Docker 使用该接口检查 API 存活；`GET /readyz` 检查 MySQL 连通性，正常返回 200，失败返回 503 和固定错误响应；不检查 Redis 或业务表结构。
 
 已有 `.env` 时，也可使用 `docker compose up -d --build`。检查状态、查看日志及停止：
 
@@ -70,7 +70,7 @@ docker compose down -v
 
 ## 配置与数据库
 
-`.env.example` 包含 Week 1 要求的全部配置项；示例密码仅用于本地开发。业务相关配置目前仅预留，后续实现时接入。
+`.env.example` 包含 Week 1 要求的全部配置项；示例密码仅用于本地开发。MySQL、上传大小、存储路径和队列配置已接入；幂等、重试等后续业务配置仍预留。
 
 Compose 首次初始化 MySQL 数据卷时自动创建 `MYSQL_DATABASE` 指定的数据库和 `MYSQL_USER` 用户。已有数据卷不会因修改这些配置而重新初始化。
 
@@ -87,7 +87,13 @@ docker compose exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u "$MYSQL_US
 docker compose exec redis redis-cli ping
 ```
 
-数据库尚未创建业务表，迁移脚本将在数据库设计明确后添加；当前没有业务迁移命令，不要手工创建未经确认的业务表。
+Week 2 的实际建表脚本为 [backend/app/schema.sql](backend/app/schema.sql)，创建 `sync_jobs`、`sync_records`、`sync_errors`。完整启动时 `mysql-init` 自动执行，成功后 API 与 Worker 才启动。单独初始化或重复执行：
+
+```sh
+docker compose run --build --rm mysql-init
+```
+
+初始化保留现有数据，不会修改已有同名表结构；后续字段升级需要新增迁移。连接设置 UTC、严格 SQL 模式和 5 秒连接超时。MySQL 配置来自 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD`。
 
 ## 本机开发环境
 
@@ -115,7 +121,7 @@ cd backend
 .venv/bin/python -m app.worker
 ```
 
-Vite 将 `/api` 请求代理到本机 `8000` 端口；容器内则通过 `API_PROXY_TARGET` 指向 API 服务。本机开发时，未来涉及数据库和 Redis 的业务需将主机地址设为 `127.0.0.1`，Compose 内使用 `mysql` 和 `redis` 服务名。
+Vite 将 `/api` 请求代理到本机 `8000` 端口；容器内则通过 `API_PROXY_TARGET` 指向 API 服务。本机 API 连接数据库前，需将 `MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD` 导出到进程环境，并将 `MYSQL_HOST` 设为 `127.0.0.1`（默认值），端口默认 3306。程序不自动加载 `.env`；Compose 通过 `env_file` 注入配置，使用 `mysql` 和 `redis` 服务名。
 
 ## 格式、检查与构建
 
@@ -137,10 +143,51 @@ npm --prefix frontend run build
 backend/.venv/bin/python scripts/smoke.py
 ```
 
-当前没有业务单元测试或集成测试套件；这些将随业务实现添加。目前采用构建、服务请求、数据库查询和 Redis PING 验证骨架，不能据此认定 CSV 业务已通过测试。
+MySQL 集成测试（需要 Docker，自动构建测试镜像）：
+
+```sh
+sh scripts/test-db.sh
+```
+
+生成可展开的测试报告，并只读导出当前开发库供人工审查（需要 API 正在运行）：
+
+```sh
+python3 scripts/review-db.py
+```
+
+终端会输出报告路径：`output/db-review/<UTC时间>/index.html`，可用浏览器打开。报告包含本次测试的预期/实际断言、真实表结构、索引和数据；同目录提供 `schema.sql`、`database-snapshot.json`、`test-results.json` 及逐表 CSV。每表最多导出 500 行，超出会明确标注；原始总行数始终保留。生成目录仅保留本地，已加入 Git 忽略规则。详细说明见 [数据库人工审查说明](docs/delivery/week-02-pr1.md)。
+
+测试使用独立 Compose 项目与临时 MySQL 数据库，不读取开发 `.env`，不挂载开发数据卷，结束后自动清理测试容器。覆盖重复初始化、任务增查与分页、状态转换、事务回滚、错误记录、金额精度、唯一约束和数据库不可用。测试也覆盖独立 Worker 消费、重复消息、文件访问失败和正常停止；CSV 解析尚未实现。
 
 依赖精确版本记录在 `backend/requirements.txt`、`backend/requirements-dev.txt` 和 `frontend/package-lock.json`。正常安装使用这些锁定文件；`.in` 文件仅列出后端直接依赖。
 
 ## 协作
 
-改动通过 Issue → 分支 → 本地检查 → PR → AI Code Review → 人工审核流程交付。本轮使用 `chore/week-01` 提交 Week 1 PR；AI 自查记录不替代人工最终审核，不自动合并。
+改动通过 Issue → 分支 → 本地检查 → PR → AI Code Review → 人工审核流程交付。本轮使用 `feature/week2-backend-api-worker` 提交 Week 2 后端 PR；AI 自查记录不替代人工最终审核，不自动合并。
+
+## 创建任务
+
+```sh
+curl -X POST http://127.0.0.1:8000/api/v1/jobs \
+  -F 'file=@samples/sample-valid.csv' \
+  -F 'name=人工测试导入'
+```
+
+成功返回 201，data 包含 id、name、PENDING 状态及创建时间，meta 为 `{}`。名称可省略，最长 128 字符。仅接收 CSV，默认上限 10 MiB，使用 `MAX_UPLOAD_FILE_SIZE_MB` 调整。
+
+Compose 使用 `uploads` 持久卷：API 写入 `/app/uploads`，Worker 同路径只读挂载。本机运行默认保存到 `var/uploads`，可通过 `UPLOAD_DIR` 配置。原始文件名只存元数据，本地存储名称由 UUID 生成。`REDIS_ADDR` 沿用原配置（也支持 Redis URL），`REDIS_JOB_QUEUE` 默认 `syncflow:jobs`；Worker 从该列表 BLPOP 取任务 ID，通过条件更新将 PENDING 改为 RUNNING，确认文件可读后模拟完成为 SUCCESS。记录统计暂为 0；真正 CSV 解析在第 3 周实现。BLPOP 暂无崩溃恢复或自动重试，异常退出后的任务需要人工检查。详见 [Worker 验收记录](docs/delivery/week-02-pr1.md)。
+
+入队失败会记录任务失败及文件级错误；详情见 [创建任务交付记录](docs/delivery/week-02-pr1.md)。自动验证继续使用 `python3 scripts/review-db.py`，所有测试写操作仅发生在独立 MySQL、Redis 和临时文件目录中。
+
+
+## 查询任务
+
+```sh
+# 列表：省略参数时默认第 1 页，每页 20 条
+curl 'http://127.0.0.1:8000/api/v1/jobs?page=1&page_size=20&status=PENDING'
+
+# 详情：把任务 ID 替换为创建接口返回的 data.id
+curl 'http://127.0.0.1:8000/api/v1/jobs/任务ID'
+```
+
+详情包含公开任务字段、记录统计、最近错误和 UTC 时间；内部存储路径不返回。任务不存在返回 404 JOB_NOT_FOUND。列表支持四种状态筛选，page_size 最大 100，非法参数返回 400 INVALID_REQUEST。空页返回空数组及正确的 meta.total。详见 [任务查询交付记录](docs/delivery/week-02-pr1.md)。

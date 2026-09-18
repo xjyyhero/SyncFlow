@@ -1,0 +1,23 @@
+All checks passed!
+16 files already formatted
+
+> syncflow-web@0.1.0 format:check
+> prettier --check .
+
+Checking formatting...
+All matched files use Prettier code style!
+
+> syncflow-web@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 74 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:  0.27 kB
+dist/assets/index-3PSg1g72.css    0.45 kB │ gzip:  0.30 kB
+dist/assets/index-DzJXdhyB.js   228.26 kB │ gzip: 73.41 kB
+
+✓ built in 88ms
+OpenAPI 与当前模型一致。
