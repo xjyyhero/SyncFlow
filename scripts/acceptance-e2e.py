@@ -34,7 +34,10 @@ def main():
         with urlopen(origin + "/api/v1/jobs/" + job_id, timeout=10) as response:
             detail = json.load(response)
         history.append(detail["data"]["status"])
-        if history[-1] in {"SUCCESS", "FAILED"} or time.monotonic() >= deadline:
+        if (
+            history[-1] in {"SUCCESS", "PARTIAL_SUCCESS", "FAILED"}
+            or time.monotonic() >= deadline
+        ):
             break
         time.sleep(0.1)
     result = {"created": created, "detail": detail, "observed_states": history}

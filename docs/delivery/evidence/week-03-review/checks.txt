@@ -1,0 +1,42 @@
+All checks passed!
+22 files already formatted
+..............
+----------------------------------------------------------------------
+Ran 14 tests in 0.201s
+
+OK
+
+> syncflow-web@1.0.0 format:check
+> prettier --check .
+
+Checking formatting...
+All matched files use Prettier code style!
+✔ 分页保留状态，切换筛选回到第一页 (0.928458ms)
+✔ 本地时间格式与缺失时间 (0.954708ms)
+✔ CSV 选择校验包含扩展名和 10 MB 精确边界 (0.102791ms)
+✔ 仅三个终态停止刷新 (0.061875ms)
+✔ 错误查询编码任务 ID 并传递分页与取消信号 (25.509625ms)
+✔ API 成功、业务错误和非 JSON 错误 (1.636333ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 151.7745
+
+> syncflow-web@1.0.0 build
+> tsc --noEmit && vite build
+
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 75 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:  0.27 kB
+dist/assets/index-Bx_oaYko.css    3.07 kB │ gzip:  1.23 kB
+dist/assets/index-DbV46Psc.js   240.46 kB │ gzip: 76.97 kB
+
+✓ built in 94ms
+OpenAPI 与当前模型一致。

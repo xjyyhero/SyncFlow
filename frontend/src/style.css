@@ -176,6 +176,10 @@ tr:last-child td {
   background: #dff3e7;
   color: #21613b;
 }
+.PARTIAL_SUCCESS {
+  background: #fff4d6;
+  color: #785400;
+}
 .FAILED {
   background: #ffe4e4;
   color: #a12c2c;
@@ -214,6 +218,30 @@ form label {
   display: grid;
   gap: 8px;
   margin-bottom: 24px;
+}
+.breadcrumbs {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.file-info,
+.raw-row {
+  overflow-wrap: anywhere;
+}
+.raw-row {
+  min-width: 200px;
+  max-width: 360px;
+}
+.raw-row summary {
+  cursor: pointer;
+}
+.raw-row pre {
+  white-space: pre-wrap;
+  font: inherit;
+}
+caption {
+  padding: 12px 16px;
+  text-align: left;
 }
 @media (max-width: 640px) {
   header span {

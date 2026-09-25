@@ -9,10 +9,18 @@ from typing import Annotated, Any, Literal
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+from fastapi.routing import APIRoute
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    field_serializer,
+    field_validator,
+)
 from starlette.exceptions import HTTPException
 
-JobStatus = Literal["PENDING", "RUNNING", "SUCCESS", "FAILED"]
+JobStatus = Literal["PENDING", "RUNNING", "SUCCESS", "PARTIAL_SUCCESS", "FAILED"]
 
 
 class HealthResponse(BaseModel):
@@ -157,15 +165,29 @@ def install_error_handlers(app: FastAPI):
             for operation in path.values():
                 if isinstance(operation, dict) and "responses" in operation:
                     operation["responses"].pop("422", None)
+        # FastAPI's exclude_none strips required JSON nulls from response examples.
+        # Restore explicit examples after schema generation, keeping schema intact.
+        for route in app.routes:
+            if not isinstance(route, APIRoute) or not route.include_in_schema:
+                continue
+            for method in route.methods:
+                responses = schema["paths"][route.path_format][method.lower()][
+                    "responses"
+                ]
+                for status, response in route.responses.items():
+                    for media, content in response.get("content", {}).items():
+                        if "examples" in content:
+                            responses[str(status)]["content"][media]["examples"] = (
+                                content["examples"]
+                            )
         return schema
 
     app.openapi = openapi
 
 
-class JobQuery(BaseModel):
+class PageQuery(BaseModel):
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=20, ge=1, le=100)
-    status: JobStatus | None = None
 
     @field_validator("page", "page_size", mode="before")
     @classmethod
@@ -177,6 +199,18 @@ class JobQuery(BaseModel):
         raise ValueError("Expected an integer")
 
 
+class JobQuery(PageQuery):
+    status: JobStatus | None = None
+
+
+def utc_timestamp(value: datetime) -> str:
+    return (
+        value.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z")
+        if value.tzinfo is None
+        else value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    )
+
+
 class JobCreated(BaseModel):
     id: str = Field(max_length=36)
     name: str = Field(max_length=128)
@@ -185,11 +219,7 @@ class JobCreated(BaseModel):
 
     @field_serializer("created_at", check_fields=False)
     def utc_created(self, value):
-        return (
-            value.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z")
-            if value.tzinfo is None
-            else value.astimezone(UTC).isoformat().replace("+00:00", "Z")
-        )
+        return utc_timestamp(value)
 
 
 class JobDetail(JobCreated):
@@ -209,6 +239,24 @@ class JobDetail(JobCreated):
 
 
 class JobListResponse(SuccessResponse[list[JobDetail]]):
+    meta: PageMeta
+
+
+class JobError(BaseModel):
+    job_id: str
+    row_number: int | None = Field(ge=1)
+    field_name: str | None
+    error_code: str
+    error_message: str
+    raw_row: JsonValue
+    created_at: datetime
+
+    @field_serializer("created_at")
+    def utc_created(self, value):
+        return utc_timestamp(value)
+
+
+class JobErrorListResponse(SuccessResponse[list[JobError]]):
     meta: PageMeta
 
 

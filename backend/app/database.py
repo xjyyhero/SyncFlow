@@ -1,4 +1,4 @@
-"""MySQL connections and re-runnable Week 2 initialization."""
+"""MySQL connections and re-runnable initialization/migrations."""
 
 import os
 from contextlib import contextmanager
@@ -37,6 +37,18 @@ def initialize():
         cursor.execute(Path(__file__).with_name("schema.sql").read_text())
         while cursor.nextset():
             pass
+        cursor.execute(
+            """SELECT CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS
+               WHERE CONSTRAINT_SCHEMA = DATABASE()
+               AND CONSTRAINT_NAME = 'ck_sync_jobs_status'"""
+        )
+        status_check = cursor.fetchone()
+        if status_check and "PARTIAL_SUCCESS" not in status_check[0]:
+            cursor.execute(
+                """ALTER TABLE sync_jobs DROP CHECK ck_sync_jobs_status,
+                   ADD CONSTRAINT ck_sync_jobs_status CHECK
+                   (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'PARTIAL_SUCCESS', 'FAILED'))"""
+            )
 
 
 def check_mysql():
@@ -47,4 +59,4 @@ def check_mysql():
 
 if __name__ == "__main__":
     initialize()
-    print("Week 2 MySQL tables initialized.")
+    print("MySQL tables initialized and migrations applied.")

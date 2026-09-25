@@ -9,7 +9,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-syncflow123}
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
     ports:
-      - "127.0.0.1:3306:3306"
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -33,7 +33,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -51,7 +51,7 @@ services:
     volumes:
       - uploads:/app/uploads
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
     depends_on:
       mysql:
         condition: service_healthy
@@ -92,7 +92,12 @@ services:
     environment:
       API_PROXY_TARGET: http://api:8000
     ports:
-      - "127.0.0.1:5173:5173"
+      - "127.0.0.1:${WEB_HOST_PORT:-5173}:5173"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     depends_on:
       api:
         condition: service_healthy

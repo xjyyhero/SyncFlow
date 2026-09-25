@@ -1,11 +1,11 @@
 # MySQL 数据库设计
 
-## Week 2 当前实现
+## Week 2 / Week 3 当前实现
 
-当前执行结构以 [backend/app/schema.sql](../../backend/app/schema.sql) 为准，创建 `sync_jobs`、`sync_records`、`sync_errors` 三张表，严格采用 Week 2 字段命名与四种任务状态。下方 Week 1 长期提案不是当前执行脚本。
+当前执行结构以 [backend/app/schema.sql](../../backend/app/schema.sql) 为准，创建 `sync_jobs`、`sync_records`、`sync_errors` 三张表，沿用 Week 2 字段命名；Week 3 新增 `PARTIAL_SUCCESS`，共五种任务状态。下方 Week 1 长期提案不是当前执行脚本。
 
 - 初始化：`python -m app.database`（在 backend 目录且已配置环境变量时）；Compose 通过 `mysql-init` 服务在 API 与 Worker 启动前执行。
-- 脚本使用 `CREATE TABLE IF NOT EXISTS`，重复执行保留已有数据；不修改已有同名表结构，后续结构升级需要新增 ALTER 迁移。MySQL DDL 隐式提交，初始化失败可修复后重跑。
+- 脚本使用 `CREATE TABLE IF NOT EXISTS`，重复执行保留已有数据；初始化入口另检查旧四状态约束，并通过可重复执行的 ALTER 升级为五状态约束。MySQL DDL 隐式提交，初始化失败可修复后重跑。
 - 连接统一配置 `utf8mb4`、严格 SQL 模式与 UTC 会话时区，时间精度为毫秒。连接上下文成功提交、失败回滚、退出关闭连接；数据访问方法不自行提交，调用方可组合原子事务。
 - 金额使用 `DECIMAL(12,2)`；成功记录业务标识用区分大小写的排序规则和大写检查约束，后续 CSV 写入方需先转大写。同一任务内 `(job_id, external_id)` 唯一。
 - 索引为任务表 `(status, created_at)`、`(created_at)`，成功记录表 `(job_id)` 及上述唯一约束，错误表 `(job_id, row_number)`。InnoDB 二级索引包含主键，支持列表按创建时间与 ID 稳定排序。

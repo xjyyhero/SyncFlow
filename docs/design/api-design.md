@@ -1,10 +1,10 @@
-# API 响应与参数契约（Week 2）
+# API 响应与参数契约（Week 2 / Week 3）
 
 当前契约为 [openapi.json](openapi.json)，由共享 Python 模型生成，使用 OpenAPI 3.1。历史 Week 1 提案保留在 [openapi-week-01.json](openapi-week-01.json)；其中的 202/413/422、QUEUED 和旧字段名不适用于本周接口。
 
 ## 当前实现范围
 
-- 已运行：任务创建、任务列表、任务详情、`/api/v1/info`、`/healthz`、`/readyz`，以及全局统一错误处理。
+- 已运行：任务创建、任务列表、任务详情、错误明细分页、`/api/v1/info`、`/healthz`、`/readyz`，以及全局统一错误处理。
 - 已提供可复用模块：成功/错误响应模型、分页与状态校验、上传字段/扩展名/文件大小校验、公开任务字段模型。
 - `GET /api/v1/jobs`、`GET /api/v1/jobs/{job_id}` 已接入真实 MySQL；导出 OpenAPI 直接使用运行应用契约，不再手写计划接口。
 - 原有 HTTP 契约测试使用测试专用路由验证共享模块；新增创建任务测试直接调用正式 POST 路由，连接独立 MySQL、Redis 和临时存储目录。创建与查询流程均已实现。
@@ -46,13 +46,13 @@ FastAPI 请求参数校验默认的 422 已统一映射为 400，OpenAPI 也不�
 
 ### 查询参数
 
-`JobQuery` 用于列表请求：
+`PageQuery` 用于错误明细分页，`JobQuery` 继承相同分页校验并增加任务状态筛选：
 
 | 字段 | 默认 | 规则 |
 | --- | --- | --- |
 | page | 1 | 十进制整数，至少 1；拒绝小数、科学计数、布尔和空字符串 |
 | page_size | 20 | 十进制整数，范围 1–100 |
-| status | null | 可省略；提供时仅允许 PENDING / RUNNING / SUCCESS / FAILED |
+| status | null | 可省略；提供时仅允许 PENDING / RUNNING / SUCCESS / PARTIAL_SUCCESS / FAILED |
 
 ### 创建任务表单
 
@@ -103,8 +103,18 @@ Redis 可能已接受消息但响应丢失；这种情况下任务会标 FAILED�
 - 查询只依赖 MySQL，不连接 Redis。数据库故障由统一处理器转换为 500 INTERNAL_ERROR，不暴露 SQL、连接信息或堆栈。
 - 排序保证相同创建时间下顺序确定；分页是页码分页，跨请求新增任务时页边界仍可能移动，不表示跨多次请求的冻结快照。
 
-## 最小 Worker（Week 2）
+## 错误明细查询（Week 3 第五节）
 
-独立 Compose 服务从 Redis 列表阻塞获取任务 ID，通过条件更新认领 PENDING 任务并提交 RUNNING，首次 started_at 保留。读取受控上传目录中的文件，模拟完成后提交 SUCCESS 和 finished_at；重复消息或不存在的任务跳过。文件缺失、目录越界等处理失败写入 FAILED 与 WORKER_PROCESSING_FAILED 错误记录。API 与 Worker 的日志均包含 job_id。API 对共享 uploads 卷可写，Worker 只读。
+`GET /api/v1/jobs/{job_id}/errors?page=1&page_size=20` 返回 `JobErrorListResponse`。分页限制与任务列表相同；不支持状态筛选。任务不存在返回 `404 JOB_NOT_FOUND`，参数非法返回 `400 INVALID_REQUEST`，数据库故障返回脱敏的 `500 INTERNAL_ERROR`。
 
-本周不解析 CSV，记录统计保持 0。当前 BLPOP 不提供消息确认或崩溃恢复；进程被强制终止、数据库不可用时需要人工核查已出队任务，自动恢复与重试后续实现。
+每条错误只返回 `job_id`、`row_number`、`field_name`、`error_code`、`error_message`、`raw_row`、`created_at`。文件级行号为 JSON `null`；原始行从 MySQL JSON 解码，CSV 原始行保持数组和原始空白，不返回 JSON 编码字符串；无原始行时为 `null`。时间统一为 UTC ISO 格式（`Z`）。
+
+查询按指定任务过滤，按 `row_number ASC, id ASC` 排序，MySQL 将空行号排在前面；同一行的多条错误由内部 ID 决定顺序，ID 不对外返回。`meta.total` 为该任务的错误条数。任务无错误、超出末页均返回 `200` 和空数组，超大合法页码不会把越界 offset 发给 MySQL。运行中也可查询已提交错误；跨请求新增错误时页边界可能改变，不提供跨页冻结快照。实现与验证见 [第五节交付记录](../delivery/week-03-errors-api.md)。
+
+## CSV Worker（Week 3 第四节）
+
+独立 Compose 服务从 Redis 列表阻塞获取任务 ID，通过条件更新认领 PENDING 任务并提交 RUNNING，首次 started_at 保留。读取受控上传目录中的 CSV，规范化合法行并保存行错误；完整文件预检后，每 250 条非空记录独立提交数据、错误与累计统计，最后一批同时提交终态和结束时间。单批系统失败记录 BATCH_WRITE_FAILED 并继续后续批次。终态包括 SUCCESS、PARTIAL_SUCCESS、FAILED。文件错误原子写入 FAILED 与对应错误记录；文件缺失/目录越界为 FILE_UNREADABLE，系统失败为 WORKER_PROCESSING_FAILED。重复消息或不存在的任务跳过。API 与 Worker 的日志均包含 job_id；共享 uploads 卷在 Worker 中只读。
+
+错误明细与验收见 [Week 3 校验交付记录](../delivery/week-03-validation.md)。分批事务和运行期间统计更新已完成，详见 [第三节验收记录](../delivery/week-03-batches.md)。当前 BLPOP 不提供消息确认或崩溃恢复；进程被强制终止、数据库不可用时需要人工核查已出队任务，自动恢复与重试后续实现。
+
+第四节已完成独立 HTTP API 与 Worker 端到端验收，覆盖成功、部分成功、文件失败与真实数据库写入失败；日志补充处理阶段和批次进度，见 [Worker 验收记录](../delivery/week-03-worker.md)。

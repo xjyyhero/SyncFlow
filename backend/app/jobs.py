@@ -18,8 +18,10 @@ from app.api_contract import (
     APIError,
     JobCreated,
     JobDetail,
+    JobErrorListResponse,
     JobListResponse,
     JobQuery,
+    PageQuery,
     ValidatedUpload,
 )
 from app.database import connection
@@ -133,3 +135,11 @@ def list_jobs(query: JobQuery) -> JobListResponse:
     with connection() as db:
         result = repository.list_jobs(db, **query.model_dump())
     return JobListResponse.model_validate(result)
+
+
+def list_job_errors(job_id: str, query: PageQuery) -> JobErrorListResponse:
+    with connection() as db:
+        if repository.get_job(db, job_id) is None:
+            raise APIError("JOB_NOT_FOUND")
+        result = repository.list_job_errors(db, job_id, **query.model_dump())
+    return JobErrorListResponse.model_validate(result)

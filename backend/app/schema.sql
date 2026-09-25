@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS sync_jobs (
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   KEY ix_sync_jobs_status_created (status, created_at),
   KEY ix_sync_jobs_created (created_at),
-  CONSTRAINT ck_sync_jobs_status CHECK (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED'))
+  CONSTRAINT ck_sync_jobs_status CHECK (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'PARTIAL_SUCCESS', 'FAILED'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS sync_records (

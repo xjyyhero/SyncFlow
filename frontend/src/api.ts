@@ -2,6 +2,7 @@ export const statuses = {
   PENDING: "待处理",
   RUNNING: "处理中",
   SUCCESS: "成功",
+  PARTIAL_SUCCESS: "部分成功",
   FAILED: "失败",
 } as const;
 export type JobStatus = keyof typeof statuses;
@@ -24,6 +25,15 @@ export interface PageMeta {
   page: number;
   page_size: number;
   total: number;
+}
+export interface JobError {
+  job_id: string;
+  row_number: number | null;
+  field_name: string | null;
+  error_code: string;
+  error_message: string;
+  raw_row: unknown;
+  created_at: string;
 }
 export interface ResponseData<T, M = Record<string, unknown>> {
   data: T;
@@ -70,12 +80,28 @@ export const api = {
     request<ResponseData<Job[], PageMeta>>(`/jobs?${query}`, { signal }),
   detail: (id: string, signal: AbortSignal) =>
     request<ResponseData<Job>>(`/jobs/${encodeURIComponent(id)}`, { signal }),
+  errors: (id: string, query: string, signal: AbortSignal) =>
+    request<ResponseData<JobError[], PageMeta>>(
+      `/jobs/${encodeURIComponent(id)}/errors?${query}`,
+      { signal },
+    ),
   create: (body: FormData) =>
     request<ResponseData<Pick<Job, "id" | "name" | "status" | "created_at">>>(
       "/jobs",
       { method: "POST", body },
     ),
 };
+export function isTerminal(status: JobStatus): boolean {
+  return (
+    status === "SUCCESS" || status === "PARTIAL_SUCCESS" || status === "FAILED"
+  );
+}
+export function validateFile(file: Pick<File, "name" | "size"> | null): string {
+  if (!file) return "请选择 CSV 文件";
+  if (!file.name.toLowerCase().endsWith(".csv")) return "仅支持 .csv 文件";
+  if (file.size > 10 * 1024 * 1024) return "文件不能超过 10 MB";
+  return "";
+}
 export function formatTime(value: string | null): string {
   if (!value) return "—";
   const date = new Date(value);

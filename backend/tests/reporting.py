@@ -83,7 +83,7 @@ class ReportResult(unittest.TextTestResult):
             ("skipped", self.skipped),
         ):
             for target, text in entries:
-                if target is test:
+                if target is test or getattr(target, "test_case", None) is test:
                     status, detail = label, text
         self.cases.append(
             {

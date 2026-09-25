@@ -5,6 +5,7 @@ from unittest.mock import patch
 from uuid import UUID
 
 from app import repository
+from app.api_contract import JobErrorListResponse
 from app.database import connection, initialize
 from app.main import app
 from fastapi.testclient import TestClient
@@ -244,3 +245,208 @@ class QueryJobTests(EvidenceCase):
             schema["components"]["schemas"]["JobListResponse"]["properties"]["meta"],
             {"$ref": "#/components/schemas/PageMeta"},
         )
+
+    def test_errors_return_public_fields_json_and_utc(self):
+        """错误的七个公开字段完整；保留原始 JSON、空值和 UTC 时间。"""
+        self.seed()
+        raw = [" S001 ", '商品,"A"\n第二行', "-1", "2026-01-01"]
+        with connection() as db, db.cursor() as cursor:
+            for number, value in enumerate((raw, {"amount": "-1"}, None), 2):
+                repository.add_error(
+                    db,
+                    job_id=job_id(1),
+                    row_number=number,
+                    field_name="amount",
+                    error_code="AMOUNT_INVALID",
+                    error_message="amount 不能为负数",
+                    raw_row=value,
+                )
+            cursor.execute(
+                "UPDATE sync_errors SET created_at='2026-01-01 10:00:00.123'"
+            )
+        response = self.client.get(f"/api/v1/jobs/{job_id(1)}/errors")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertEqual(
+            data[0],
+            {
+                "job_id": job_id(1),
+                "row_number": 2,
+                "field_name": "amount",
+                "error_code": "AMOUNT_INVALID",
+                "error_message": "amount 不能为负数",
+                "raw_row": raw,
+                "created_at": "2026-01-01T10:00:00.123000Z",
+            },
+        )
+        self.assertEqual(data[1]["raw_row"], {"amount": "-1"})
+        self.assertIsNone(data[2]["raw_row"])
+
+    def test_errors_empty_missing_and_invalid_job(self):
+        """已有任务无错误为 200 空页；缺失任务为 404，非法 ID 为 400。"""
+        self.seed()
+        response = self.client.get(f"/api/v1/jobs/{job_id(1)}/errors")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "data": [],
+                "meta": {"page": 1, "page_size": 20, "total": 0},
+            },
+        )
+        for value in (job_id(99), "a' OR '1'='1"):
+            response = self.client.get(f"/api/v1/jobs/{value}/errors")
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(
+                response.json(),
+                {
+                    "error": {
+                        "code": "JOB_NOT_FOUND",
+                        "message": "任务不存在",
+                        "details": [],
+                    }
+                },
+            )
+        response = self.client.get(f"/api/v1/jobs/{'a' * 37}/errors")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "INVALID_REQUEST")
+
+    def test_errors_paginate_with_defaults_maximum_and_empty_pages(self):
+        """105 条错误默认取 20 条、最大取 100 条，超大页码仍返回正确总数。"""
+        self.seed()
+        with connection() as db:
+            for number in range(2, 107):
+                repository.add_error(
+                    db,
+                    job_id=job_id(1),
+                    row_number=number,
+                    error_code="FIELD_REQUIRED",
+                    error_message="name 必填",
+                )
+        route = f"/api/v1/jobs/{job_id(1)}/errors"
+        response = self.client.get(route)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["data"]), 20)
+        self.assertEqual(
+            response.json()["meta"], {"page": 1, "page_size": 20, "total": 105}
+        )
+        self.assertEqual(
+            len(self.client.get(route + "?page_size=100").json()["data"]), 100
+        )
+        for page, expected in ((2, 5), (3, 0), (int("9" * 40), 0)):
+            body = self.client.get(
+                route, params={"page": page, "page_size": 100}
+            ).json()
+            self.assertEqual(len(body["data"]), expected)
+            self.assertEqual(
+                body["meta"], {"page": page, "page_size": 100, "total": 105}
+            )
+
+    def test_errors_sort_nulls_then_rows_then_ids_and_isolate_jobs(self):
+        """空行号优先，同一行按 ID 稳定排序，跨页无重复且只查询指定任务。"""
+        self.seed(2)
+        with connection() as db:
+            for row, label in (
+                (9, "last"),
+                (2, "row-first"),
+                (None, "file-first"),
+                (2, "row-second"),
+                (None, "file-second"),
+            ):
+                repository.add_error(
+                    db,
+                    job_id=job_id(1),
+                    row_number=row,
+                    error_code="FILE_EMPTY" if row is None else "FIELD_REQUIRED",
+                    error_message=label,
+                )
+            repository.add_error(
+                db, job_id=job_id(2), error_code="FILE_EMPTY", error_message="other-job"
+            )
+        errors = []
+        for page in (1, 2, 3):
+            body = self.client.get(
+                f"/api/v1/jobs/{job_id(1)}/errors",
+                params={"page": page, "page_size": 2},
+            ).json()
+            self.assertEqual(body["meta"], {"page": page, "page_size": 2, "total": 5})
+            errors.extend(body["data"])
+        self.assertEqual(
+            [e["error_message"] for e in errors],
+            ["file-first", "file-second", "row-first", "row-second", "last"],
+        )
+        self.assertEqual([e["row_number"] for e in errors], [None, None, 2, 2, 9])
+        for error in errors[:2]:
+            self.assertIsNone(error["field_name"])
+            self.assertIsNone(error["raw_row"])
+
+    def test_errors_invalid_pagination_never_queries_database(self):
+        """分页参数沿用既有严格整数校验，在访问数据库前返回统一 400。"""
+        with patch("app.jobs.connection") as connect:
+            for query in (
+                "page=0",
+                "page=-1",
+                "page=1.5",
+                "page=true",
+                "page=",
+                "page=1e2",
+                "page_size=0",
+                "page_size=101",
+                "page_size=text",
+            ):
+                response = self.client.get(f"/api/v1/jobs/{job_id(1)}/errors?{query}")
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json()["error"]["code"], "INVALID_REQUEST")
+                self.assertEqual(
+                    response.json()["error"]["details"][0]["field"], query.split("=")[0]
+                )
+            self.assertFalse(connect.called)
+
+    def test_errors_database_failure_is_safe_and_redis_not_required(self):
+        """错误查询不依赖 Redis；真实数据库连接失败返回脱敏 500。"""
+        self.seed()
+        route = f"/api/v1/jobs/{job_id(1)}/errors"
+        with patch.dict(os.environ, {"MYSQL_PORT": "1"}):
+            response = self.client.get(route)
+            self.assertEqual(response.status_code, 500)
+            self.assertEqual(
+                response.json(),
+                {
+                    "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "服务内部错误，请稍后重试",
+                        "details": [],
+                    }
+                },
+            )
+        with patch.dict(os.environ, {"REDIS_ADDR": "redis-test:1"}):
+            self.assertEqual(self.client.get(route).status_code, 200)
+
+    def test_errors_openapi_matches_public_contract_and_examples(self):
+        """运行时文档包含分页限制、响应模型以及行级、文件级、空页和错误示例。"""
+        schema = self.client.get("/openapi.json").json()
+        operation = schema["paths"]["/api/v1/jobs/{job_id}/errors"]["get"]
+        self.assertEqual(set(operation["responses"]), {"200", "400", "404", "500"})
+        params = {p["name"]: p["schema"] for p in operation["parameters"]}
+        self.assertEqual(set(params), {"job_id", "page", "page_size"})
+        self.assertEqual(params["page"]["default"], 1)
+        self.assertEqual(params["page"]["minimum"], 1)
+        self.assertEqual(params["page_size"]["default"], 20)
+        self.assertEqual(params["page_size"]["minimum"], 1)
+        self.assertEqual(params["page_size"]["maximum"], 100)
+        content = operation["responses"]["200"]["content"]["application/json"]
+        self.assertEqual(
+            content["schema"], {"$ref": "#/components/schemas/JobErrorListResponse"}
+        )
+        self.assertEqual(set(content["examples"]), {"row_error", "file_error", "empty"})
+        for example in content["examples"].values():
+            JobErrorListResponse.model_validate(example["value"])
+        for status, code in (
+            ("400", "INVALID_REQUEST"),
+            ("404", "JOB_NOT_FOUND"),
+            ("500", "INTERNAL_ERROR"),
+        ):
+            examples = operation["responses"][status]["content"]["application/json"][
+                "examples"
+            ]
+            self.assertEqual(examples[code]["value"]["error"]["code"], code)

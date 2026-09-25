@@ -1,11 +1,15 @@
 """Real MySQL checks. Run exclusively in the isolated compose.test.yaml project."""
 
 import os
+import tempfile
 import unittest
+from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import patch
 
 from app import repository as repo
+from app.csv_source import read_csv
 from app.database import check_mysql, connection, initialize
 from app.main import readyz
 from mysql.connector import Error, IntegrityError
@@ -93,6 +97,31 @@ class DatabaseTests(EvidenceCase):
             self.assertEqual(row["status"], "SUCCESS")
             self.assertIsNone(repo.get_job(db, "missing"))
             self.assertFalse(repo.start_job(db, "missing"))
+
+    def test_week2_status_constraint_upgrades_without_data_loss(self):
+        """从第二周四状态约束升级，保留旧任务；重复迁移后支持 PARTIAL_SUCCESS。"""
+        with connection() as db, db.cursor() as cursor:
+            job(db)
+            cursor.execute(
+                """ALTER TABLE sync_jobs DROP CHECK ck_sync_jobs_status,
+                   ADD CONSTRAINT ck_sync_jobs_status CHECK
+                   (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED'))"""
+            )
+        try:
+            initialize()
+            initialize()
+            with connection() as db, db.cursor() as cursor:
+                self.assertEqual(repo.get_job(db, "a")["name"], "测试导入")
+                cursor.execute(
+                    "UPDATE sync_jobs SET status='PARTIAL_SUCCESS' WHERE id='a'"
+                )
+                self.assertEqual(
+                    repo.list_jobs(db, status="PARTIAL_SUCCESS")["meta"]["total"], 1
+                )
+                with self.assertRaises(Error):
+                    cursor.execute("UPDATE sync_jobs SET status='INVALID' WHERE id='a'")
+        finally:
+            initialize()
 
     def test_stable_pagination_filter_and_injection(self):
         """分页示例：同时间插入 a/b/c，每页 2 条，第一页 c/b、第二页 a。"""
@@ -185,6 +214,63 @@ class DatabaseTests(EvidenceCase):
                 cursor.execute("UPDATE sync_jobs SET status = 'BAD' WHERE id = 'a'")
             with self.assertRaises(Error):
                 cursor.execute("UPDATE sync_jobs SET total_records = -1 WHERE id = 'a'")
+
+    def test_csv_normalized_values_round_trip_in_mysql(self):
+        """真实 CSV 规范化后存入 DECIMAL(12,2)/DATE，边界精确且金额越界被拒绝。"""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "values.csv"
+            path.write_text(
+                "external_id,name,amount,record_date\n"
+                " min , 最小值 ,0,1000-01-01\n"
+                " max , 最大值 ,9999999999.99,9999-12-31\n"
+                " normal , 商品 ,19.9,2024-02-29\n",
+                encoding="utf-8-sig",
+            )
+            parsed = read_csv(path)
+        self.assertEqual(parsed.errors, [])
+        sql = """INSERT INTO sync_records
+                 (job_id, external_id, name, amount, record_date)
+                 VALUES (%s, %s, %s, %s, %s)"""
+        with connection() as db, db.cursor() as cursor:
+            job(db)
+            cursor.executemany(
+                sql,
+                [
+                    (
+                        "a",
+                        row["external_id"],
+                        row["name"],
+                        row["amount"],
+                        row["record_date"],
+                    )
+                    for row in parsed.records
+                ],
+            )
+            with self.assertRaises(Error):
+                cursor.execute(
+                    sql, ("a", "OVER", "越界", Decimal(10000000000), date(2026, 1, 1))
+                )
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute(
+                "SELECT external_id, name, amount, record_date FROM sync_records ORDER BY id"
+            )
+            self.assertEqual(
+                cursor.fetchall(),
+                [
+                    ("MIN", "最小值", Decimal("0.00"), date(1000, 1, 1)),
+                    ("MAX", "最大值", Decimal("9999999999.99"), date(9999, 12, 31)),
+                    ("NORMAL", "商品", Decimal("19.90"), date(2024, 2, 29)),
+                ],
+            )
+            cursor.execute(
+                """SELECT column_name, column_type FROM information_schema.columns
+                   WHERE table_schema = DATABASE() AND table_name = 'sync_records'
+                   AND column_name IN ('amount', 'record_date') ORDER BY column_name"""
+            )
+            self.assertEqual(
+                cursor.fetchall(),
+                [("amount", "decimal(12,2)"), ("record_date", "date")],
+            )
 
     def test_health_and_real_connection_failure(self):
         """连接示例：正常返回可用；连接端口 1 失败后返回 503，响应不含凭据。"""

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "SyncFlow",
-    "version": "0.2.0"
+    "version": "1.0.0"
   },
   "paths": {
     "/healthz": {
@@ -335,6 +335,7 @@
                     "PENDING",
                     "RUNNING",
                     "SUCCESS",
+                    "PARTIAL_SUCCESS",
                     "FAILED"
                   ],
                   "type": "string"
@@ -430,6 +431,186 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SuccessResponse_JobDetail_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_REQUEST",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "value": {
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "请求参数不合法",
+                        "details": []
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "value": {
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "服务内部错误，请稍后重试",
+                        "details": []
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "JOB_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "JOB_NOT_FOUND": {
+                    "value": {
+                      "error": {
+                        "code": "JOB_NOT_FOUND",
+                        "message": "任务不存在",
+                        "details": []
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/errors": {
+      "get": {
+        "summary": "查询任务错误明细",
+        "description": "支持 page（默认 1）与 page_size（默认 20，最大 100）。按 row_number ASC, id ASC 排序，文件级空行号排在前面；返回原始 JSON 和 UTC 时间。任务不存在返回 JOB_NOT_FOUND，任务存在但无错误返回空列表，运行中也可查询。",
+        "operationId": "listJobErrors",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "description": "UUID 或 ULID 任务标识",
+              "title": "Job Id"
+            },
+            "description": "UUID 或 ULID 任务标识"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "错误明细与分页信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobErrorListResponse"
+                },
+                "examples": {
+                  "row_error": {
+                    "summary": "行级错误",
+                    "value": {
+                      "data": [
+                        {
+                          "job_id": "example-job",
+                          "row_number": 2,
+                          "field_name": "amount",
+                          "error_code": "AMOUNT_INVALID",
+                          "error_message": "amount 不能为负数",
+                          "raw_row": [
+                            "S001",
+                            "商品A",
+                            "-1",
+                            "2026-01-01"
+                          ],
+                          "created_at": "2026-01-01T10:00:00Z"
+                        }
+                      ],
+                      "meta": {
+                        "page": 1,
+                        "page_size": 20,
+                        "total": 1
+                      }
+                    }
+                  },
+                  "file_error": {
+                    "summary": "文件级错误",
+                    "value": {
+                      "data": [
+                        {
+                          "job_id": "example-job",
+                          "row_number": null,
+                          "field_name": null,
+                          "error_code": "FILE_EMPTY",
+                          "error_message": "文件为空或只有表头",
+                          "raw_row": null,
+                          "created_at": "2026-01-01T10:00:00Z"
+                        }
+                      ],
+                      "meta": {
+                        "page": 1,
+                        "page_size": 20,
+                        "total": 1
+                      }
+                    }
+                  },
+                  "empty": {
+                    "summary": "任务存在但无错误",
+                    "value": {
+                      "data": [],
+                      "meta": {
+                        "page": 1,
+                        "page_size": 20,
+                        "total": 0
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -632,6 +813,7 @@
               "PENDING",
               "RUNNING",
               "SUCCESS",
+              "PARTIAL_SUCCESS",
               "FAILED"
             ],
             "title": "Status"
@@ -669,6 +851,7 @@
               "PENDING",
               "RUNNING",
               "SUCCESS",
+              "PARTIAL_SUCCESS",
               "FAILED"
             ],
             "title": "Status"
@@ -767,6 +950,84 @@
         ],
         "title": "JobDetail"
       },
+      "JobError": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "row_number": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Number"
+          },
+          "field_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Name"
+          },
+          "error_code": {
+            "type": "string",
+            "title": "Error Code"
+          },
+          "error_message": {
+            "type": "string",
+            "title": "Error Message"
+          },
+          "raw_row": {
+            "$ref": "#/components/schemas/JsonValue"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "row_number",
+          "field_name",
+          "error_code",
+          "error_message",
+          "raw_row",
+          "created_at"
+        ],
+        "title": "JobError"
+      },
+      "JobErrorListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/JobError"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "JobErrorListResponse"
+      },
       "JobListResponse": {
         "properties": {
           "data": {
@@ -787,6 +1048,7 @@
         ],
         "title": "JobListResponse"
       },
+      "JsonValue": {},
       "PageMeta": {
         "properties": {
           "page": {

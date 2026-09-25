@@ -1,0 +1,97 @@
+[
+  {
+    "file": "sample-valid.csv",
+    "label": "正常",
+    "status": "SUCCESS",
+    "total_records": 5,
+    "success_records": 5,
+    "failed_records": 0,
+    "error_code": null,
+    "error_rows": [],
+    "records": [
+      [
+        "S001",
+        "商品A",
+        "19.90",
+        "2026-01-01"
+      ],
+      [
+        "S002",
+        "商品B",
+        "29.50",
+        "2026-01-02"
+      ],
+      [
+        "S003",
+        "键盘-机械轴",
+        "19.00",
+        "2026-01-03"
+      ],
+      [
+        "S004",
+        "赠品_试用装",
+        "0.00",
+        "2026-01-04"
+      ],
+      [
+        "S005",
+        "显示器, 27 英寸",
+        "1299.50",
+        "2026-02-28"
+      ]
+    ]
+  },
+  {
+    "file": "sample-mixed.csv",
+    "label": "混合",
+    "status": "PARTIAL_SUCCESS",
+    "total_records": 22,
+    "success_records": 1,
+    "failed_records": 21,
+    "error_code": "AMOUNT_INVALID",
+    "error_rows": [
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+    ],
+    "records": [
+      [
+        "S1",
+        "商品",
+        "19.90",
+        "2026-01-01"
+      ]
+    ]
+  },
+  {
+    "file": "sample-invalid-header.csv",
+    "label": "文件错误",
+    "status": "FAILED",
+    "total_records": 0,
+    "success_records": 0,
+    "failed_records": 0,
+    "error_code": "CSV_HEADER_INVALID",
+    "error_rows": [
+      null
+    ],
+    "records": []
+  }
+]

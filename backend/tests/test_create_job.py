@@ -1,7 +1,10 @@
 """Exercise the real POST route against isolated MySQL, Redis and filesystem."""
 
 import hashlib
+import json
 import os
+import subprocess
+import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -109,6 +112,44 @@ class CreateJobTests(EvidenceCase):
             self.assertEqual(path.parent, self.root)
             self.assertEqual(path.name, row["id"] + ".csv")
         self.assertIn("../../outside.csv", [row["source_file_name"] for row in rows])
+
+    def test_uploaded_csv_is_readable_by_independent_process(self):
+        """真实 API 保存 BOM 文件；独立后端进程按同一存储路径读取并规范化。"""
+        content = (
+            "external_id,name,amount,record_date\n s001 , 商品 ,19.9,2026-01-01\n"
+        ).encode("utf-8-sig")
+        response = self.upload("中文.CSV", content)
+        self.assertEqual(response.status_code, 201)
+        row = self.rows()[0]
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import json,sys; from app.csv_source import read_csv; "
+                    "data=read_csv(sys.argv[1]); "
+                    "print(json.dumps({'records':data.records,'errors':data.errors},default=str))"
+                ),
+                row["stored_file_path"],
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+        parsed = json.loads(result.stdout)
+        self.assertEqual(parsed["errors"], [])
+        self.assertEqual(
+            parsed["records"],
+            [
+                {
+                    "external_id": "S001",
+                    "name": "商品",
+                    "amount": "19.90",
+                    "record_date": "2026-01-01",
+                }
+            ],
+        )
 
     def test_rejected_requests_have_no_side_effects(self):
         """无效文件/字段和超限文件不会创建任务、文件或队列消息。"""
