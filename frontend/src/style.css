@@ -3,28 +3,64 @@
   color: #182b36;
   background: #f5f7fa;
   line-height: 1.6;
+  font-synthesis: none;
+}
+* {
+  box-sizing: border-box;
 }
 body {
   margin: 0;
 }
+header {
+  background: white;
+  border-bottom: 1px solid #d8e0e8;
+  padding: 18px max(24px, calc((100vw - 1200px) / 2));
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+.brand {
+  font-weight: 800;
+  font-size: 24px;
+  text-decoration: none;
+}
+header span,
+.muted {
+  color: #566875;
+  font-size: 14px;
+}
 main {
-  max-width: 760px;
-  margin: 10vh auto;
-  padding: 24px;
+  max-width: 1248px;
+  margin: 36px auto;
+  padding: 0 24px 48px;
 }
 h1 {
-  font-size: clamp(2.5rem, 8vw, 4rem);
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
   margin: 0;
+  overflow-wrap: anywhere;
 }
 h2 {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
+  margin-top: 0;
+}
+p {
+  margin: 8px 0 16px;
 }
 .eyebrow {
   color: #46637a;
+  font-size: 13px;
   font-weight: 600;
+  margin: 0 0 4px;
+}
+.heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  margin: 28px 0;
 }
 section {
-  margin-top: 32px;
+  margin: 20px 0;
   padding: 24px;
   border: 1px solid #d8e0e8;
   border-radius: 12px;
@@ -34,7 +70,197 @@ a {
   color: #165a98;
   text-underline-offset: 4px;
 }
-a:focus-visible {
-  outline: 3px solid #165a98;
-  outline-offset: 4px;
+button,
+.button {
+  border: 1px solid #165a98;
+  background: #165a98;
+  color: white;
+  padding: 9px 18px;
+  border-radius: 7px;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  white-space: nowrap;
+}
+button.secondary {
+  background: white;
+  color: #165a98;
+  border-color: #bccbd8;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+:focus-visible {
+  outline: 3px solid #277abf;
+  outline-offset: 3px;
+}
+select,
+input {
+  font: inherit;
+  padding: 8px 12px;
+  border: 1px solid #aebdca;
+  border-radius: 6px;
+  background: white;
+  color: inherit;
+  max-width: 100%;
+}
+.toolbar,
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+.toolbar {
+  padding: 16px 20px;
+}
+select {
+  margin-left: 12px;
+}
+.pagination {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.pagination span {
+  margin-right: auto;
+}
+.table-wrap {
+  padding: 0;
+  overflow-x: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+  font-size: 14px;
+}
+th,
+td {
+  padding: 16px;
+  border-bottom: 1px solid #e4eaf0;
+}
+th {
+  background: #eef3f7;
+  white-space: nowrap;
+}
+tr:last-child td {
+  border-bottom: 0;
+}
+.name {
+  min-width: 140px;
+  max-width: 260px;
+  overflow-wrap: anywhere;
+}
+.date {
+  white-space: nowrap;
+}
+.badge {
+  display: inline-block;
+  padding: 3px 11px;
+  border-radius: 20px;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+.PENDING {
+  background: #fff0c6;
+  color: #735200;
+}
+.RUNNING {
+  background: #dfeeff;
+  color: #15549b;
+}
+.SUCCESS {
+  background: #dff3e7;
+  color: #21613b;
+}
+.PARTIAL_SUCCESS {
+  background: #fff4d6;
+  color: #785400;
+}
+.FAILED {
+  background: #ffe4e4;
+  color: #a12c2c;
+}
+.empty {
+  text-align: center;
+  padding: 56px 24px;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.stats section {
+  margin: 0;
+}
+.stats strong {
+  font-size: 32px;
+}
+dl div {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  padding: 10px 0;
+}
+dt {
+  color: #566875;
+}
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+form {
+  max-width: 540px;
+}
+form label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.breadcrumbs {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.file-info,
+.raw-row {
+  overflow-wrap: anywhere;
+}
+.raw-row {
+  min-width: 200px;
+  max-width: 360px;
+}
+.raw-row summary {
+  cursor: pointer;
+}
+.raw-row pre {
+  white-space: pre-wrap;
+  font: inherit;
+}
+caption {
+  padding: 12px 16px;
+  text-align: left;
+}
+@media (max-width: 640px) {
+  header span {
+    display: none;
+  }
+  main {
+    padding: 0 16px 32px;
+  }
+  .heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  dl div {
+    grid-template-columns: 1fr;
+  }
+  .toolbar {
+    flex-wrap: wrap;
+  }
 }

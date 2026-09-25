@@ -13,3 +13,8 @@ dist/
 /docs/week-01.pdf
 
 /docs/sources/*.pdf
+
+# Local database snapshots and generated test reports.
+/output/
+
+/var/uploads/

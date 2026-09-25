@@ -5,4 +5,5 @@ if [ ! -f .env ]; then
   (umask 077; cp .env.example .env)
 fi
 docker compose up --build --wait --wait-timeout 180
-printf '\nWeb: http://localhost:5173\nAPI docs: http://localhost:8000/docs\n'
+printf '\nWeb: http://%s\nAPI docs: http://%s/docs\n' \
+  "$(docker compose port web 5173)" "$(docker compose port api 8000)"
