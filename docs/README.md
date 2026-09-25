@@ -17,3 +17,5 @@
 原始 PDF 的链接只有本地资料存在时可用。CSV 样例仍位于项目根目录的 [samples/sample-valid.csv](../samples/sample-valid.csv)。启动与操作说明见 [项目 README](../README.md)。
 
 V1.0：[本地部署说明](deployment/local-v1.0.md)、[发布包与部署验收](delivery/week-03-release.md)、[Release Notes](delivery/v1.0-release-notes.md)、[演示与复盘初稿](delivery/week-03-demo-retrospective.md)。
+
+第九节：[PR、AI Review 与发布交接](delivery/week-03-handoff.md)。
