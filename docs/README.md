@@ -10,6 +10,8 @@
 
 建议先读需求理解和整体系统讲解，再看技术设计；验收时从交付索引进入。
 
+第二周已合并交付记录：[后端与 Worker PR](delivery/week-02-pr1.md)、[React 页面 PR](delivery/week-02-pr2.md)，包含当时的测试日志和页面截图。
+
 第三周：[Week 3 工作清单](delivery/week-03-checklist.md)、[CSV 文件读取与数据契约](delivery/week-03-csv-contract.md)、[校验与错误记录](delivery/week-03-validation.md)、[分批事务与统计](delivery/week-03-batches.md)、[Redis 与真实 Worker](delivery/week-03-worker.md)、[错误明细查询 API](delivery/week-03-errors-api.md)、[React 页面与状态刷新](delivery/week-03-pages.md)、[测试与验收报告](delivery/week-03-tests.md)。
 
 原始 PDF 的链接只有本地资料存在时可用。CSV 样例仍位于项目根目录的 [samples/sample-valid.csv](../samples/sample-valid.csv)。启动与操作说明见 [项目 README](../README.md)。

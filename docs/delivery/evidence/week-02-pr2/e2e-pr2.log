@@ -1,0 +1,2 @@
+PASS: Web proxy -> POST 201 -> Redis -> Worker -> GET SUCCESS; job_id=64b1ebe7-f9b4-4afd-8a2a-f38ecdf1820b
+验收任务与上传文件保留在开发环境，供人工审查。

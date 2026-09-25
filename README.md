@@ -162,6 +162,8 @@ python3 scripts/review-db.py
 
 ## 协作
 
+第二周已合并的交付记录：[后端与 Worker](docs/delivery/week-02-pr1.md)、[React 页面](docs/delivery/week-02-pr2.md)。前端测试使用 Node 原生 TypeScript 类型擦除，推荐使用与 Docker 镜像一致的 Node 24。
+
 改动通过 Issue → 分支 → 本地检查 → PR → AI Code Review → 人工审核流程交付。AI 自查记录不替代人工最终审核，不自动合并。V1.0 的 PR、标签和正式发布按第九节完成。
 
 ## 创建任务
