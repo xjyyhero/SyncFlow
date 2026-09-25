@@ -4,8 +4,9 @@
 
 ## 交付入口
 
-- PR 与 GitHub Review：创建后补充链接。
-- V1.0 GitHub Release：待创建发布草稿，附源码包及 SHA-256。
+- [PR #9：Week 3 真实 CSV 同步、错误明细与 V1.0 交付](https://github.com/xjyyhero/SyncFlow/pull/9)。
+- [GitHub AI Review 记录](https://github.com/xjyyhero/SyncFlow/pull/9#pullrequestreview-5317201950)：COMMENTED，明确为 AI 作者自查。
+- [V1.0 发布草稿](https://github.com/xjyyhero/SyncFlow/releases/tag/untagged-ba0fa612906ee592cf33)：附源码包及 SHA-256，目标固定为交付提交；未正式发布。草稿需要仓库权限才能查看。
 - [V1.1 规划 Issue #8](https://github.com/xjyyhero/SyncFlow/issues/8)：先讨论可靠队列与中断任务恢复；正式发布后再开始开发。
 
 ## 人工验收与正式发布
