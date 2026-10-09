@@ -2,7 +2,15 @@
 
 数据同步与任务管理服务：用户上传 CSV，系统异步导入数据，并提供任务状态、统计和错误明细查询。
 
-已完成任务创建、查询、MySQL 数据访问及 Redis 队列。Week 3 第一至八节已将 CSV 读取、校验和错误记录接入真实 Worker，并提供错误明细分页 API 和页面：合法行写入 MySQL，非法行保留明细，任务产生准确的最终统计和成功/部分成功/失败状态。当前每 250 条非空记录独立提交；单批写入失败只回滚该批，保留前批成功数据并继续后批，按批更新统计。页面支持上传前校验、任务列表、详情自动刷新和错误明细分页。见 [Week 3 清单](docs/delivery/week-03-checklist.md)、[真实 Worker 验收记录](docs/delivery/week-03-worker.md)、[错误明细 API 验收记录](docs/delivery/week-03-errors-api.md)及 [React 页面验收记录](docs/delivery/week-03-pages.md)。
+当前已完成 Week 4：CSV 上传后异步入队，Worker 按配置并发执行，支持任务超时、取消、优雅停止与重启恢复。详情页每 3 秒刷新状态和统计，终态停止轮询，网络失败保留数据并自动重试。
+
+CSV 每 250 条非空记录独立提交，单批失败保留此前提交的数据；任务提供成功、部分成功、失败和取消结果，以及错误明细分页。完整自动重试调度留到第五周。
+
+## Week 4 交付入口
+
+- [功能演示：操作步骤与 15 张截图](docs/delivery/week-04-demo.md)
+- [验收报告与复跑命令](docs/delivery/week-04-tests.md)：96 项后端测试、6 项前端测试、7 组轮询检查、9 组页面检查及 3 个数据库对账样例通过。
+- [工作清单](docs/delivery/week-04-checklist.md)、[最终交付记录](docs/delivery/week-04-handoff.md)、[AI 自查](docs/delivery/week-04-review.md)
 
 ## 技术栈与目录
 
@@ -18,7 +26,7 @@ compose.yaml       五服务编排
 .env.example       本地配置示例
 ```
 
-需求说明见 [需求理解](docs/requirements/requirements-understanding.md)，任务进度见 [完整交付索引](docs/delivery/week-01-delivery.md)
+需求说明见 [需求理解](docs/requirements/requirements-understanding.md)，当前任务进度见 [Week 4 工作清单](docs/delivery/week-04-checklist.md)
 
 ## 设计文档
 
@@ -70,7 +78,7 @@ docker compose down -v
 
 ## 配置与数据库
 
-`.env.example` 将当前生效配置与未来预留项分开。MySQL、上传大小、单任务行数、存储路径和队列配置已接入；Worker 并发、任务超时、重试和幂等 TTL 仅预留。示例密码仅用于本地开发。详见 [配置表与部署说明](docs/deployment/local-v1.0.md)。
+`.env.example` 将当前生效配置与未来预留项分开。MySQL、上传大小、单任务行数、存储路径、队列、Worker 并发、任务超时和停止收尾配置均已接入；重试次数、退避间隔和幂等 TTL 仍为预留项。示例密码仅用于本地开发。详见 [配置表与部署说明](docs/deployment/local-v1.0.md)。
 
 Compose 首次初始化 MySQL 数据卷时自动创建 `MYSQL_DATABASE` 指定的数据库和 `MYSQL_USER` 用户。已有数据卷不会因修改这些配置而重新初始化。
 
@@ -87,13 +95,13 @@ docker compose exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u "$MYSQL_US
 docker compose exec redis redis-cli ping
 ```
 
-Week 2 的实际建表脚本为 [backend/app/schema.sql](backend/app/schema.sql)，创建 `sync_jobs`、`sync_records`、`sync_errors`。完整启动时 `mysql-init` 自动执行，成功后 API 与 Worker 才启动。单独初始化或重复执行：
+实际建表脚本为 [backend/app/schema.sql](backend/app/schema.sql)，创建 `sync_jobs`、`sync_records`、`sync_errors`。完整启动时 `mysql-init` 自动执行，成功后 API 与 Worker 才启动。单独初始化或重复执行：
 
 ```sh
 docker compose run --build --rm mysql-init
 ```
 
-初始化保留现有数据；会将旧任务状态约束升级为支持 PARTIAL_SUCCESS 的五状态约束，重复执行安全。连接设置 UTC、严格 SQL 模式和 5 秒连接超时。MySQL 配置来自 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD`。
+初始化保留现有数据；会将旧任务状态约束升级为支持 RETRYING、CANCELING、CANCELED 等全部八种状态的约束，重复执行安全。连接设置 UTC、严格 SQL 模式和默认 5 秒连接/读写超时；Worker 监控查询使用 1 秒超时。MySQL 配置来自 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD`。
 
 ## 本机开发环境
 
@@ -180,8 +188,6 @@ Compose 使用 `uploads` 持久卷：API 写入 `/app/uploads`，Worker 同路�
 
 入队失败会取消仍为 PENDING 的任务并记录文件级错误，避免非法的 PENDING → FAILED 转换；数据库回写失败时保留标记，供扫描补投。详情见 [Week 4 第二节交付记录](docs/delivery/week-04-queue.md)。自动验证继续使用 `python3 scripts/review-db.py`，所有测试写操作仅发生在独立 MySQL、Redis 和临时文件目录中。
 
-
-
 ## Worker 并发、超时与取消
 
 `WORKER_CONCURRENCY` 控制每个 Worker 服务的并发任务数；未设置时按 CPU 核数取 2–4。`JOB_TIMEOUT_SECONDS` 默认 300 秒，两项均须为正整数。每个消费者独立取任务，并在独立子进程中执行 CSV 处理；超时停止并回收子进程，任务标记为 FAILED，已提交数据保留。
@@ -226,7 +232,7 @@ curl 'http://127.0.0.1:8000/api/v1/jobs/JOB_ID/errors?page=1&page_size=20'
 
 状态筛选和分页同步 URL，时间按浏览器本地时区显示。前端客户端与响应类型集中在 `frontend/src/api.ts`。运行 `node --test frontend/src/api.test.ts` 验证查询参数、上传边界、终态、时间格式和 API 错误处理；`sh scripts/check.sh` 同时执行这些测试及类型检查、生产构建。真实浏览器上传及导航验收见 [Week 3 第六节交付记录](docs/delivery/week-03-pages.md)，最新轮询验收见 [Week 4 第五节交付记录](docs/delivery/week-04-polling.md)。
 
-第七节测试验收已完成：74 项后端测试、6 项前端测试、9 组浏览器验收和 3 类固定样例数据库对账通过。查看 [测试报告、复跑命令与截图](docs/delivery/week-03-tests.md) 和 [样例及预期](samples/README.md)。
+最新验证结果见 [Week 4 测试报告](docs/delivery/week-04-tests.md)，输入文件及预期结果见 [样例说明](samples/README.md)。Week 3 历史验收记录保留在 [Week 3 测试报告](docs/delivery/week-03-tests.md)。
 
 ## V1.0 本地发布包
 
@@ -237,7 +243,3 @@ python3 scripts/package-release.py
 ```
 
 输出 `output/releases/syncflow-v1.0.0.tar.gz` 和 `.sha256`。包中包含源码、锁定依赖、配置示例、正常/异常样例、测试报告和截图；不含真实配置、上传文件、依赖缓存或 Git 历史。解压后按部署说明启动，不依赖本机源码挂载。这是本地 V1.0 源码交付包，正式标签和发布仍由第九节验收。
-
-## Week 4 功能演示
-
-[截图演示与操作说明](docs/delivery/week-04-demo.md) · [完整验收报告](docs/delivery/week-04-tests.md) · [Week 4 工作清单](docs/delivery/week-04-checklist.md) · [最终交付记录](docs/delivery/week-04-handoff.md) · [AI 自查](docs/delivery/week-04-review.md)
