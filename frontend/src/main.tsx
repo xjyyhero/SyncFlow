@@ -33,30 +33,38 @@ function useRequest<T>(
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    setState({ key });
-    const run = () =>
-      load(controller.signal).then(
-        (data) => {
-          if (controller.signal.aborted) return;
-          setState({ key, data });
-          if (shouldPoll?.(data)) timer = setTimeout(run, 3000);
-        },
-        (error) => {
-          if (!controller.signal.aborted)
-            setState({
-              key,
-              error:
-                error instanceof ApiError
-                  ? error
-                  : new Error("网络连接失败，请检查连接后重试"),
-            });
-        },
-      );
+    let timer: ReturnType<typeof setInterval> | undefined;
+    let inFlight = false;
+    const previous = state.key === key ? state.data : undefined;
+    setState({ key, data: previous });
+    const run = async () => {
+      if (inFlight || controller.signal.aborted) return;
+      inFlight = true;
+      try {
+        const data = await load(controller.signal);
+        if (controller.signal.aborted) return;
+        setState({ key, data });
+        if (!shouldPoll?.(data)) clearInterval(timer);
+      } catch (error) {
+        if (!controller.signal.aborted)
+          setState((current) => ({
+            key,
+            data: current.key === key ? current.data : undefined,
+            error:
+              error instanceof ApiError
+                ? error
+                : new Error("网络连接失败，请检查连接后重试"),
+          }));
+      } finally {
+        inFlight = false;
+      }
+    };
+    if (shouldPoll && (previous === undefined || shouldPoll(previous)))
+      timer = setInterval(() => void run(), 3000);
     void run();
     return () => {
       controller.abort();
-      clearTimeout(timer);
+      clearInterval(timer);
     };
     // The key represents the complete request; changing it cancels stale responses.
   }, [key, attempt]);
@@ -254,13 +262,16 @@ function Detail() {
   return (
     <>
       <Link to="/">← 返回任务列表</Link>
-      {error instanceof ApiError && error.code === "JOB_NOT_FOUND" ? (
+      {!job && error instanceof ApiError && error.code === "JOB_NOT_FOUND" ? (
         <section className="empty">
           <h1>任务不存在</h1>
           <p>该任务可能已删除，请返回列表查看。</p>
         </section>
-      ) : error ? (
-        <Failure error={error} retry={retry} />
+      ) : error && !job ? (
+        <>
+          <Failure error={error} retry={retry} />
+          <p className="muted">将继续自动重试，也可以点击重试立即刷新。</p>
+        </>
       ) : !result ? (
         <Loading />
       ) : !job ? (
@@ -269,6 +280,17 @@ function Detail() {
         </section>
       ) : (
         <>
+          {error && (
+            <section role="alert">
+              <h2>刷新失败</h2>
+              <p>{error.message}</p>
+              <p>
+                已保留上次加载的数据。
+                {!isTerminal(job.status) && "将继续自动重试。"}
+              </p>
+              <button onClick={retry}>立即重试</button>
+            </section>
+          )}
           <div className="heading">
             <div>
               <p className="eyebrow">任务详情</p>
@@ -308,7 +330,7 @@ function Detail() {
             <p className="muted">时间按浏览器本地时区显示</p>
           </section>
           <section>
-            <h2>最近错误</h2>
+            <h2>最近状态说明</h2>
             {job.last_error_code || job.last_error_message ? (
               <>
                 <p>{job.last_error_code}</p>

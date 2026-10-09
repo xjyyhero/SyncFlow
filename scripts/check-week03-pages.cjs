@@ -140,7 +140,8 @@ async function check(name, run) {
       counts[id] = (counts[id] || 0) + 1;
       await route.fulfill({ json: { data: { ...state, id }, meta: {} } });
     });
-    await page.clock.install();
+    await page.clock.install({ time: new Date("2026-10-08T12:00:00Z") });
+    await page.clock.pauseAt(new Date("2026-10-08T12:00:01Z"));
     await check("3 秒刷新状态和统计，三个终态均停止轮询", async () => {
       for (const terminal of ["SUCCESS", "PARTIAL_SUCCESS", "FAILED"]) {
         state = job("poll");
@@ -195,6 +196,7 @@ async function check(name, run) {
       await nextResponse;
       assert.equal(counts.old, oldCount);
       await page.getByRole("link", { name: "← 返回任务列表" }).click();
+      await page.getByRole("heading", { name: "任务列表" }).waitFor();
       const stopped = counts["new-id"];
       await page.clock.fastForward(9000);
       assert.equal(counts["new-id"], stopped);

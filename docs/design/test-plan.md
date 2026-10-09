@@ -12,7 +12,7 @@
 | 行级错误 | 逐行记录具体错误码，继续处理后续行；同任务只保留首个合法的规范化标识 | `test_csv_source.py`、`test_worker.py` |
 | 事务与计数 | 每 250 条非空记录一批；失败只回滚本批；前后成功批保留，计数与实际提交相符 | `test_worker.py` |
 | 终态 | 全成功 SUCCESS、混合 PARTIAL_SUCCESS、全失败 FAILED；最后批次统计与终态一起提交 | `test_worker.py` |
-| Redis/Worker | 真实队列与独立进程；开始/结束时间、进度日志；重复消息跳过；投递失败记录 FAILED | `test_create_job.py`、`test_worker.py` |
+| Redis/Worker | 真实队列与独立进程；开始/结束时间、进度日志；重复消息跳过；投递失败取消仍待执行的任务并记录原因 | `test_create_job.py`、`test_worker.py` |
 | 查询接口 | 不存在返回 404 JOB_NOT_FOUND；分页非法返回 400；默认 1/20、最大 100、稳定排序 | `test_query_jobs.py` |
 | 安全与错误 | 参数化 SQL、受控上传路径、统一脱敏内部异常、取消旧页面请求 | 后端集成与浏览器验收 |
 | React 上传 | 预检文件后缀/大小、名称上限、文件信息、提交禁用、201 跳转、失败保留输入 | `api.test.ts`、`check-week03-pages.cjs` |

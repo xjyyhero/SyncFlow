@@ -334,9 +334,12 @@
                   "enum": [
                     "PENDING",
                     "RUNNING",
+                    "RETRYING",
                     "SUCCESS",
                     "PARTIAL_SUCCESS",
-                    "FAILED"
+                    "FAILED",
+                    "CANCELING",
+                    "CANCELED"
                   ],
                   "type": "string"
                 },
@@ -487,6 +490,122 @@
                       "error": {
                         "code": "JOB_NOT_FOUND",
                         "message": "任务不存在",
+                        "details": []
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/cancel": {
+      "post": {
+        "summary": "取消任务",
+        "description": "等待执行或重试的任务直接取消；执行中的任务先进入 CANCELING，Worker 停止执行后进入 CANCELED。已请求取消或终态返回 409，保留已提交数据。",
+        "operationId": "cancelJob",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_JobDetail_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_REQUEST",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INVALID_REQUEST": {
+                    "value": {
+                      "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "请求参数不合法",
+                        "details": []
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "value": {
+                      "error": {
+                        "code": "INTERNAL_ERROR",
+                        "message": "服务内部错误，请稍后重试",
+                        "details": []
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "JOB_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "JOB_NOT_FOUND": {
+                    "value": {
+                      "error": {
+                        "code": "JOB_NOT_FOUND",
+                        "message": "任务不存在",
+                        "details": []
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "INVALID_JOB_TRANSITION",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "INVALID_JOB_TRANSITION": {
+                    "value": {
+                      "error": {
+                        "code": "INVALID_JOB_TRANSITION",
+                        "message": "任务状态不允许此操作",
                         "details": []
                       }
                     }
@@ -812,9 +931,12 @@
             "enum": [
               "PENDING",
               "RUNNING",
+              "RETRYING",
               "SUCCESS",
               "PARTIAL_SUCCESS",
-              "FAILED"
+              "FAILED",
+              "CANCELING",
+              "CANCELED"
             ],
             "title": "Status"
           },
@@ -850,9 +972,12 @@
             "enum": [
               "PENDING",
               "RUNNING",
+              "RETRYING",
               "SUCCESS",
               "PARTIAL_SUCCESS",
-              "FAILED"
+              "FAILED",
+              "CANCELING",
+              "CANCELED"
             ],
             "title": "Status"
           },

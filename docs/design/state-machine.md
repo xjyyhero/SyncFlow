@@ -1,39 +1,36 @@
-# 任务状态机（设计提案）
+# 任务状态机（Week 4）
 
-状态值同时用于 OpenAPI、MySQL、前端展示和测试。规则依据 PRD 并补充提案，待人工审核；当前未实现业务状态机。
+以 week-04.pdf 的八状态协议为准，替代第一周提案中的 QUEUED、RETRY_WAIT、CANCELLED 命名。后端模型、数据库约束、查询筛选和前端共享这些状态。
 
-```mermaid
-stateDiagram-v2
-  [*] --> QUEUED: 创建成功
-  QUEUED --> RUNNING: Worker 原子领取
-  QUEUED --> CANCELLED: V1.1 取消
-  RUNNING --> SUCCESS: 全部成功
-  RUNNING --> PARTIAL_SUCCESS: 部分行失败
-  RUNNING --> FAILED: 全行失败或不可恢复故障
-  RUNNING --> RETRY_WAIT: V1.1 可重试错误且仍有次数
-  RETRY_WAIT --> RUNNING: 到期原子领取
-  RETRY_WAIT --> CANCELLED: V1.1 取消
-  RUNNING --> CANCELLED: V1.1 批次边界确认取消
-  SUCCESS --> [*]
-  PARTIAL_SUCCESS --> [*]
-  FAILED --> [*]
-  CANCELLED --> [*]
-```
-
-| 状态 | 进入条件与副作用 | 可离开到 |
+| 状态 | 含义 | 允许转换到 |
 | --- | --- | --- |
-| QUEUED | 文件预检通过、任务事务已提交，计数初始为零 | RUNNING、CANCELLED |
-| RUNNING | 条件领取成功，attempt_count 增加，插入执行尝试，设置租约 | SUCCESS、PARTIAL_SUCCESS、FAILED、RETRY_WAIT、CANCELLED |
-| SUCCESS | processed_count=total_count 且 failed_count=0 | 无 |
-| PARTIAL_SUCCESS | 全部处理结束且 success_count>0、failed_count>0 | 无 |
-| FAILED | 全行失败，或文件丢失、超时、重试耗尽等系统错误；可能已有成功数据 | 无 |
-| RETRY_WAIT | 可重试错误，attempt_count<MAX_JOB_ATTEMPTS；next_retry_at 已设置 | RUNNING、CANCELLED |
-| CANCELLED | QUEUED/RETRY_WAIT 原子取消，或 RUNNING 在批次边界确认取消 | 无 |
+| PENDING | 已创建，等待执行 | RUNNING、CANCELED |
+| RUNNING | Worker 正在处理 | SUCCESS、PARTIAL_SUCCESS、RETRYING、FAILED、CANCELING |
+| RETRYING | 本次失败，等待下一次重试 | PENDING、FAILED、CANCELED |
+| CANCELING | 已请求取消，等待安全停止 | CANCELED、FAILED |
+| SUCCESS | 所有有效记录均写入成功 | 无 |
+| PARTIAL_SUCCESS | 文件可读取，至少一条成功且至少一条失败 | 无 |
+| FAILED | 文件级校验失败、全部有效记录写入失败或系统处理失败；重试机制接入后包含重试耗尽 | 无 |
+| CANCELED | 已取消 | 无 |
 
-创建前空文件或表头错误返回 4xx，不产生 FAILED 任务。total_count 为预检所得非空数据记录数且大于零；processed_count=success_count+failed_count，且不超过 total_count。
+## 转换与一致性
 
-RUNNING 的取消请求只设置 cancel_requested=true，返回 202；Worker 在批次事务边界检查，取消与最终完成通过锁定任务行串行化。已到终态再取消返回 409 JOB_NOT_CANCELLABLE；重复取消 CANCELLED 返回 200 原任务。取消保留已提交数据，不算业务回滚。
+`repository.transition_job` 是应用中唯一修改已有任务状态的入口，通过带来源状态条件的 SQL UPDATE 原子转换。非法转换抛出 `APIError("INVALID_JOB_TRANSITION")`，统一 HTTP 错误处理映射为 409，并记录任务 ID、原状态和目标状态。不存在的任务为 404。
 
-每个终态设置 finished_at；任务 started_at 保留首次启动时间，attempt 的 started_at/finished_at 记录每次执行。重试不清空成功/错误记录和 checkpoint，避免重放已提交批次。FAILED 不手动原地重开；V1.1 的重试为自动重试，用户修正文件后创建新任务。手动重试按钮不是当前提案范围。
+Worker 领取是内部消费动作：仅允许 PENDING → RUNNING，冲突或任务不存在时跳过，不把重复消息当成服务故障。终态不能再次领取或转回其他状态。
 
-可重试错误提案：数据库连接暂时中断、锁等待或死锁（事务已回滚）、Worker 租约丢失后的恢复。不可重试：文件丢失、文件内容被改变、业务字段错误（记录为行错误）、任务超时。超时按每次 attempt 的启动时间计算 300 秒，重试后重新计时。详细产品语义仍待确认。
+每次转换显式更新 `updated_at`，保存 `last_error_code` / `last_error_message` 并写日志。正常转换错误码为空，消息说明领取或成功原因；实际错误保留业务错误码。进入 RUNNING 时记录本次 `started_at`，进入终态时记录 `finished_at`，非终态清空 `finished_at`。时间使用数据库 UTC。
+
+批次数据、错误、统计和最终状态仍在同一事务中提交；失败回滚不留下只改了状态的数据。保留已有确认丢失后的批次去重逻辑。任务失败或取消不删除已经提交的数据。
+
+## 投递失败与协议冲突的处理
+
+原实现 PENDING → FAILED 不在本周合法转换表中。因此队列投递失败或确认丢失时，仅对仍处于 PENDING 的任务执行 PENDING → CANCELED，记录 `QUEUE_DISPATCH_FAILED` 和文件级错误明细；创建请求仍返回 500。
+
+如果消息已经被 Worker 领取或处理完，取消补偿不会覆盖 RUNNING 或终态。数据库同时不可用时保留已提交的 `QUEUE_DISPATCH_PENDING` 标记，第二节扫描补投超时 PENDING，第四节扫描将超时 RUNNING / CANCELING 标记 FAILED 并保留已提交结果。
+
+## 本节边界
+
+第一节实现状态规则及现有执行链路接入；第三节已实现取消接口、独立任务进程、并发限制和超时中断。生产取消接口对重复取消及终态返回 409，不开放任意状态修改接口。第四节已完成服务整体停止与重启恢复：共用收尾期限，超时任务进入 FAILED；重启扫描过期 RUNNING / CANCELING，保留已提交数据。第五周实现完整重试机制。
+
+验证与交付见 [Week 4 第一节](../delivery/week-04-state-machine.md)。

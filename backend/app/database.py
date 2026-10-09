@@ -8,7 +8,7 @@ import mysql.connector
 
 
 @contextmanager
-def connection():
+def connection(*, timeout=5):
     """One transaction per context; always close, rollback on failure."""
     db = mysql.connector.connect(
         host=os.environ.get("MYSQL_HOST", "127.0.0.1"),
@@ -19,7 +19,9 @@ def connection():
         charset="utf8mb4",
         time_zone="+00:00",
         sql_mode="STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,NO_ENGINE_SUBSTITUTION",
-        connection_timeout=5,
+        connection_timeout=timeout,
+        read_timeout=timeout,
+        write_timeout=timeout,
         autocommit=False,
     )
     try:
@@ -43,11 +45,14 @@ def initialize():
                AND CONSTRAINT_NAME = 'ck_sync_jobs_status'"""
         )
         status_check = cursor.fetchone()
-        if status_check and "PARTIAL_SUCCESS" not in status_check[0]:
+        if status_check and any(
+            status not in status_check[0]
+            for status in ("PARTIAL_SUCCESS", "RETRYING", "CANCELING", "CANCELED")
+        ):
             cursor.execute(
                 """ALTER TABLE sync_jobs DROP CHECK ck_sync_jobs_status,
                    ADD CONSTRAINT ck_sync_jobs_status CHECK
-                   (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'PARTIAL_SUCCESS', 'FAILED'))"""
+                   (status IN ('PENDING', 'RUNNING', 'RETRYING', 'SUCCESS', 'PARTIAL_SUCCESS', 'FAILED', 'CANCELING', 'CANCELED'))"""
             )
 
 

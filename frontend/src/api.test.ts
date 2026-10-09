@@ -42,10 +42,15 @@ test("CSV 选择校验包含扩展名和 10 MB 精确边界", () => {
   // Empty CSV is a file-level worker error, not an upload validation error.
   assert.equal(validateFile({ name: "empty.csv", size: 0 }), "");
 });
-test("仅三个终态停止刷新", () => {
-  for (const status of ["SUCCESS", "PARTIAL_SUCCESS", "FAILED"] as const)
+test("四个终态停止刷新，其他状态继续刷新", () => {
+  for (const status of [
+    "SUCCESS",
+    "PARTIAL_SUCCESS",
+    "FAILED",
+    "CANCELED",
+  ] as const)
     assert.equal(isTerminal(status), true);
-  for (const status of ["PENDING", "RUNNING"] as const)
+  for (const status of ["PENDING", "RUNNING", "RETRYING", "CANCELING"] as const)
     assert.equal(isTerminal(status), false);
 });
 test("错误查询编码任务 ID 并传递分页与取消信号", async () => {

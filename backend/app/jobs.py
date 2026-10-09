@@ -100,12 +100,7 @@ def create_job(upload: ValidatedUpload) -> JobCreated:
         logger.error("job_id=%s queue dispatch failed", job_id)
         try:
             with connection() as db:
-                repository.fail_job(
-                    db,
-                    job_id,
-                    error_code="QUEUE_DISPATCH_FAILED",
-                    error_message="任务队列投递失败",
-                )
+                repository.cancel_dispatch(db, job_id)
         except (MySQLError, OSError):
             logger.error(
                 "job_id=%s failed to record dispatch failure; pending marker retained",
@@ -128,6 +123,12 @@ def get_job(job_id: str) -> JobDetail:
         row = repository.get_job(db, job_id)
     if row is None:
         raise APIError("JOB_NOT_FOUND")
+    return JobDetail.model_validate(row)
+
+
+def cancel_job(job_id: str) -> JobDetail:
+    with connection() as db:
+        row = repository.request_cancel(db, job_id)
     return JobDetail.model_validate(row)
 
 

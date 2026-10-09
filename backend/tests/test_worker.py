@@ -20,10 +20,11 @@ from app.csv_source import HEADER
 from app.database import connection, initialize
 from app.jobs import queue_client
 from app.main import app
-from app.worker import BATCH_SIZE, process_job, write_batch
+from app.worker import BATCH_SIZE, process_job, redispatch_pending, write_batch
 from fastapi.testclient import TestClient
 from httpx import Client, HTTPError
 from mysql.connector import Error as MySQLError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from reporting import EvidenceCase
 
 
@@ -45,7 +46,12 @@ class WorkerTests(EvidenceCase):
         self.root = Path(directory.name)
         self.key = f"syncflow:worker-test:{uuid4()}"
         env = patch.dict(
-            os.environ, {"UPLOAD_DIR": str(self.root), "REDIS_JOB_QUEUE": self.key}
+            os.environ,
+            {
+                "UPLOAD_DIR": str(self.root),
+                "REDIS_JOB_QUEUE": self.key,
+                "WORKER_CONCURRENCY": "1",
+            },
         )
         env.start()
         self.addCleanup(env.stop)
@@ -99,6 +105,110 @@ class WorkerTests(EvidenceCase):
     def counts(self, job_id):
         row = self.row(job_id)
         return (row["total_records"], row["success_records"], row["failed_records"])
+
+    def age_pending(self, job_id):
+        with connection() as db, db.cursor() as cursor:
+            cursor.execute(
+                "UPDATE sync_jobs SET updated_at='2020-01-01' WHERE id=%s", (job_id,)
+            )
+
+    def test_pending_recovery_only_requeues_stale_pending(self):
+        """仅补投超过 60 秒的 PENDING，其他七状态和新任务不受影响；补投后限频。"""
+        ids = {}
+        for status in repository.JOB_STATUSES:
+            job_id = self.create()
+            ids[status] = job_id
+            with connection() as db, db.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE sync_jobs SET status=%s, updated_at='2020-01-01' WHERE id=%s",
+                    (status, job_id),
+                )
+        fresh = self.create()
+        self.queue.delete(self.key)
+        redispatch_pending(self.queue)
+        self.assertEqual(self.queue.lrange(self.key, 0, -1), [ids["PENDING"]])
+        self.assertEqual(
+            self.row(ids["PENDING"])["last_error_code"], "QUEUE_REDISPATCHED"
+        )
+        redispatch_pending(self.queue)
+        self.assertEqual(self.queue.llen(self.key), 1)
+        for status, job_id in ids.items():
+            self.assertEqual(self.row(job_id)["status"], status)
+        self.assertEqual(self.row(fresh)["status"], "PENDING")
+
+    def test_pop_before_claim_failure_is_recovered(self):
+        """消息已弹出但数据库领取失败：补投后可正常执行且重复消息不重复写入。"""
+        job_id = self.create()
+        self.assertEqual(self.queue.blpop(self.key, timeout=1)[1], job_id)
+        with (
+            patch("app.worker.connection", side_effect=MySQLError("offline")),
+            self.assertRaises(MySQLError),
+        ):
+            process_job(job_id)
+        self.assertEqual(self.row(job_id)["status"], "PENDING")
+        self.age_pending(job_id)
+        redispatch_pending(self.queue)
+        self.assertEqual(self.queue.blpop(self.key, timeout=1)[1], job_id)
+        self.assertTrue(process_job(job_id))
+        self.assertFalse(process_job(job_id))
+        self.assertEqual(len(self.records(job_id)), 1)
+
+    def test_recovery_ack_loss_and_marker_failure_remain_retryable(self):
+        """补投确认丢失或回写失败不会提前更新时间，后续可重试，重复投递只执行一次。"""
+        job_id = self.create()
+        self.queue.delete(self.key)
+        self.age_pending(job_id)
+        original = self.queue.rpush
+        before = self.row(job_id)
+
+        def lost_ack(*args):
+            original(*args)
+            raise RedisTimeoutError("lost acknowledgement")
+
+        with (
+            patch.object(self.queue, "rpush", side_effect=lost_ack),
+            self.assertRaises(RedisTimeoutError),
+        ):
+            redispatch_pending(self.queue)
+        self.assertEqual(self.row(job_id), before)
+        with (
+            patch(
+                "app.worker.repository.mark_redispatched",
+                side_effect=MySQLError("offline"),
+            ),
+            self.assertRaises(MySQLError),
+        ):
+            redispatch_pending(self.queue)
+        self.assertEqual(self.row(job_id), before)
+        redispatch_pending(self.queue)
+        self.assertEqual(self.queue.lrange(self.key, 0, -1), [job_id] * 3)
+        results = [
+            process_job(self.queue.blpop(self.key, timeout=1)[1]) for _ in range(3)
+        ]
+        self.assertEqual(results, [True, False, False])
+        self.assertEqual(len(self.records(job_id)), 1)
+
+    def test_recovery_does_not_overwrite_a_concurrent_cancellation(self):
+        """扫描后发生取消，补投标记不能覆盖取消原因；残留消息不能执行。"""
+        job_id = self.create()
+        self.queue.delete(self.key)
+        self.age_pending(job_id)
+        original = self.queue.rpush
+
+        def cancel_then_publish(*args):
+            with connection() as db:
+                repository.transition_job(
+                    db, job_id, "CANCELED", error_message="用户取消"
+                )
+            return original(*args)
+
+        with patch.object(self.queue, "rpush", side_effect=cancel_then_publish):
+            redispatch_pending(self.queue)
+        row = self.row(job_id)
+        self.assertEqual(row["status"], "CANCELED")
+        self.assertEqual(row["last_error_message"], "用户取消")
+        self.assertFalse(process_job(self.queue.blpop(self.key, timeout=1)[1]))
+        self.assertEqual(self.records(job_id), [])
 
     def test_batch_boundaries_and_committed_progress(self):
         """250 行事务边界；每批提交后独立连接可见准确进度，最后一批原子完成。"""
@@ -513,7 +623,15 @@ class WorkerTests(EvidenceCase):
     def test_missing_and_nonpending_jobs_are_skipped(self):
         """不存在、FAILED、RUNNING 任务都不能被重复认领或误标成功。"""
         self.assertFalse(process_job(str(uuid4())))
-        for status in ("FAILED", "RUNNING"):
+        for status in (
+            "SUCCESS",
+            "PARTIAL_SUCCESS",
+            "FAILED",
+            "CANCELED",
+            "RUNNING",
+            "RETRYING",
+            "CANCELING",
+        ):
             job_id = self.create()
             with connection() as db, db.cursor() as cursor:
                 cursor.execute(
@@ -786,7 +904,9 @@ class WorkerTests(EvidenceCase):
     def test_independent_worker_consumes_real_queue_and_stops(self):
         """独立 Worker 进程消费真实队列，重复/无效消息不影响后续任务，SIGTERM 正常退出。"""
         first = self.create()
-        self.queue.rpush(self.key, first, str(uuid4()))
+        self.queue.blpop(self.key, timeout=1)  # Simulate consumer loss before claim.
+        self.age_pending(first)
+        self.queue.rpush(self.key, b"\xff", "not-a-job-id", str(uuid4()))
         invalid = self.create(b"wrong,header\n")
         mixed = self.create(
             (",".join(HEADER) + "\nA,n,-1,2026-01-01\nB,n,2,2026-01-01\n").encode()
@@ -801,6 +921,7 @@ class WorkerTests(EvidenceCase):
                 while time.monotonic() < deadline:
                     if (
                         self.row(second)["status"] == "SUCCESS"
+                        and self.row(first)["status"] == "SUCCESS"
                         and self.queue.llen(self.key) == 0
                     ):
                         break
@@ -830,6 +951,8 @@ class WorkerTests(EvidenceCase):
                     "skipped",
                     "processed=1/1",
                     "Stopped",
+                    f"job_id={first} redispatched (stale PENDING)",
+                    "invalid queue message discarded",
                 ):
                     self.assertIn(text, output)
             finally:

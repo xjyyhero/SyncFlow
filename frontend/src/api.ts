@@ -1,6 +1,9 @@
 export const statuses = {
   PENDING: "待处理",
   RUNNING: "处理中",
+  RETRYING: "等待重试",
+  CANCELING: "取消中",
+  CANCELED: "已取消",
   SUCCESS: "成功",
   PARTIAL_SUCCESS: "部分成功",
   FAILED: "失败",
@@ -93,7 +96,10 @@ export const api = {
 };
 export function isTerminal(status: JobStatus): boolean {
   return (
-    status === "SUCCESS" || status === "PARTIAL_SUCCESS" || status === "FAILED"
+    status === "SUCCESS" ||
+    status === "PARTIAL_SUCCESS" ||
+    status === "FAILED" ||
+    status === "CANCELED"
   );
 }
 export function validateFile(file: Pick<File, "name" | "size"> | null): string {

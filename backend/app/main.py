@@ -24,7 +24,7 @@ from app.api_contract import (
     validate_upload,
 )
 from app.database import check_mysql
-from app.jobs import create_job, get_job, list_job_errors, list_jobs
+from app.jobs import cancel_job, create_job, get_job, list_job_errors, list_jobs
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
@@ -110,6 +110,18 @@ def get_job_detail(
     ],
 ):
     return SuccessResponse(data=get_job(job_id))
+
+
+@app.post(
+    "/api/v1/jobs/{job_id}/cancel",
+    response_model=SuccessResponse[JobDetail],
+    operation_id="cancelJob",
+    summary="取消任务",
+    description="等待执行或重试的任务直接取消；执行中的任务先进入 CANCELING，Worker 停止执行后进入 CANCELED。已请求取消或终态返回 409，保留已提交数据。",
+    responses=error_docs("JOB_NOT_FOUND", "INVALID_JOB_TRANSITION"),
+)
+def post_cancel_job(job_id: Annotated[str, Path(min_length=1, max_length=36)]):
+    return SuccessResponse(data=cancel_job(job_id))
 
 
 @app.get(

@@ -20,7 +20,16 @@ from pydantic import (
 )
 from starlette.exceptions import HTTPException
 
-JobStatus = Literal["PENDING", "RUNNING", "SUCCESS", "PARTIAL_SUCCESS", "FAILED"]
+JobStatus = Literal[
+    "PENDING",
+    "RUNNING",
+    "RETRYING",
+    "SUCCESS",
+    "PARTIAL_SUCCESS",
+    "FAILED",
+    "CANCELING",
+    "CANCELED",
+]
 
 
 class HealthResponse(BaseModel):
@@ -66,6 +75,7 @@ ERRORS = {
     "INVALID_FILE_EXTENSION": (400, "仅支持 CSV 文件"),
     "FILE_TOO_LARGE": (400, "文件超过大小限制"),
     "JOB_NOT_FOUND": (404, "任务不存在"),
+    "INVALID_JOB_TRANSITION": (409, "任务状态不允许此操作"),
     "INTERNAL_ERROR": (500, "服务内部错误，请稍后重试"),
     "DATABASE_UNAVAILABLE": (503, "数据库暂不可用"),
     "NOT_FOUND": (404, "接口不存在"),
