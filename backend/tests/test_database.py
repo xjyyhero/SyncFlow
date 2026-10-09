@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app import repository as repo
+from app.api_contract import APIError
 from app.csv_source import read_csv
 from app.database import check_mysql, connection, initialize
 from app.main import readyz
@@ -85,12 +86,16 @@ class DatabaseTests(EvidenceCase):
             self.assertIsNone(row["idempotency_key"])
             cursor.execute("SELECT @@session.time_zone")
             self.assertEqual(cursor.fetchone()[0], "+00:00")
-            self.assertFalse(repo.complete_job(db, "a"))
+            with self.assertRaises(APIError) as raised:
+                repo.complete_job(db, "a")
+            self.assertEqual(raised.exception.status, 409)
             self.assertTrue(repo.start_job(db, "a"))
             started = repo.get_job(db, "a")["started_at"]
             self.assertFalse(repo.start_job(db, "a"))
             self.assertTrue(repo.complete_job(db, "a"))
-            self.assertFalse(repo.complete_job(db, "a"))
+            with self.assertRaises(APIError) as raised:
+                repo.complete_job(db, "a")
+            self.assertEqual(raised.exception.status, 409)
             row = repo.get_job(db, "a")
             self.assertEqual(row["started_at"], started)
             self.assertGreaterEqual(row["finished_at"], started)
@@ -162,11 +167,12 @@ class DatabaseTests(EvidenceCase):
         with connection() as db:
             self.assertIsNone(repo.get_job(db, "a"))
             job(db)
+            repo.start_job(db, "a")
         with self.assertRaises(RuntimeError), connection() as db:
             repo.fail_job(db, "a", error_code="QUEUE_ERROR", error_message="投递失败")
             raise RuntimeError("abort")
         with connection() as db, db.cursor() as cursor:
-            self.assertEqual(repo.get_job(db, "a")["status"], "PENDING")
+            self.assertEqual(repo.get_job(db, "a")["status"], "RUNNING")
             cursor.execute("SELECT COUNT(*) FROM sync_errors")
             self.assertEqual(cursor.fetchone()[0], 0)
             self.assertTrue(
@@ -174,9 +180,9 @@ class DatabaseTests(EvidenceCase):
                     db, "a", error_code="QUEUE_ERROR", error_message="投递失败"
                 )
             )
-            self.assertFalse(
+            with self.assertRaises(APIError) as raised:
                 repo.fail_job(db, "a", error_code="QUEUE_ERROR", error_message="重复")
-            )
+            self.assertEqual(raised.exception.status, 409)
             self.assertEqual(repo.get_job(db, "a")["last_error_code"], "QUEUE_ERROR")
             cursor.execute("SELECT `row_number`, raw_row FROM sync_errors")
             self.assertEqual(cursor.fetchall(), [(None, None)])

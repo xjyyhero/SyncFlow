@@ -175,14 +175,14 @@ class CreateJobTests(EvidenceCase):
                 201,
             )
 
-    def test_redis_failure_records_failed_job(self):
-        """Redis 实际连接失败：返回脱敏 500，任务 FAILED 且留有文件级错误记录。"""
+    def test_redis_failure_cancels_pending_job(self):
+        """Redis 实际连接失败：返回脱敏 500，任务 CANCELED 且留有文件级错误记录。"""
         with patch.dict(os.environ, {"REDIS_ADDR": "redis-test:1"}):
             response = self.upload()
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()["error"]["code"], "INTERNAL_ERROR")
         row = self.rows()[0]
-        self.assertEqual(row["status"], "FAILED")
+        self.assertEqual(row["status"], "CANCELED")
         self.assertEqual(row["last_error_code"], "QUEUE_DISPATCH_FAILED")
         self.assertIsNotNone(row["finished_at"])
         self.assertTrue(Path(row["stored_file_path"]).exists())
@@ -197,7 +197,9 @@ class CreateJobTests(EvidenceCase):
         """队列失败且错误回写失败时，先前提交的待投递标记仍可用于排查。"""
         with (
             patch.dict(os.environ, {"REDIS_ADDR": "redis-test:1"}),
-            patch("app.jobs.repository.fail_job", side_effect=MySQLError("private")),
+            patch(
+                "app.jobs.repository.cancel_dispatch", side_effect=MySQLError("private")
+            ),
         ):
             response = self.upload()
         self.assertEqual(response.status_code, 500)
@@ -251,7 +253,7 @@ class CreateJobTests(EvidenceCase):
         self.assertEqual(self.queue.llen(self.key), 0)
 
     def test_redis_acknowledgement_loss_does_not_retry(self):
-        """Redis 已收消息但响应超时：不重复投递；FAILED 任务不能进入 RUNNING。"""
+        """Redis 已收消息但响应超时：不重复投递；CANCELED 任务不能进入 RUNNING。"""
 
         def accepted_then_timeout(*args):
             self.queue.rpush(*args)
@@ -265,7 +267,7 @@ class CreateJobTests(EvidenceCase):
         self.assertEqual(response.status_code, 500)
         row = self.rows()[0]
         self.assertEqual(self.queue.lrange(self.key, 0, -1), [row["id"]])
-        self.assertEqual(row["status"], "FAILED")
+        self.assertEqual(row["status"], "CANCELED")
         with connection() as db:
             self.assertFalse(repository.start_job(db, row["id"]))
 

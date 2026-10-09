@@ -1,0 +1,1192 @@
+{
+  "verified_at": "2026-10-08T10:54:59.673555+00:00",
+  "backend": {
+    "passed": true,
+    "tests_run": 96,
+    "groups": {
+      "test_api": 7,
+      "test_create_job": 11,
+      "test_csv_source": 14,
+      "test_database": 8,
+      "test_job_states": 4,
+      "test_query_jobs": 15,
+      "test_reporting": 1,
+      "test_worker": 22,
+      "test_worker_control": 6,
+      "test_worker_shutdown": 8
+    },
+    "cases": [
+      {
+        "id": "test_api.APIContractTests.test_invalid_query_returns_400_not_422",
+        "description": "非法分页与状态：0、101、小数、空值、字符串和未知状态均返回 400。",
+        "status": "passed",
+        "seconds": 0.0176
+      },
+      {
+        "id": "test_api.APIContractTests.test_missing_job_and_internal_errors_are_safe",
+        "description": "任务缺失为 404；数据库、未知异常及响应校验错误统一为脱敏 500。",
+        "status": "passed",
+        "seconds": 0.0122
+      },
+      {
+        "id": "test_api.APIContractTests.test_openapi_matches_error_contract",
+        "description": "OpenAPI 描述实际 400/404/500 错误，并移除框架默认 422 响应。",
+        "status": "passed",
+        "seconds": 0.0132
+      },
+      {
+        "id": "test_api.APIContractTests.test_public_job_fields_and_utc",
+        "description": "公开任务模型过滤内部路径、连接信息，字段统一且时间使用 UTC Z。",
+        "status": "passed",
+        "seconds": 0.0032
+      },
+      {
+        "id": "test_api.APIContractTests.test_success_envelope_and_query_defaults",
+        "description": "成功结构：data/meta 始终存在；分页默认 1/20，状态默认空。",
+        "status": "passed",
+        "seconds": 0.0082
+      },
+      {
+        "id": "test_api.APIContractTests.test_upload_required_name_and_extension",
+        "description": "上传字段：缺文件、超长名称返回 INVALID_REQUEST；非 CSV 返回专用错误码。",
+        "status": "passed",
+        "seconds": 0.0095
+      },
+      {
+        "id": "test_api.APIContractTests.test_upload_size_boundary_and_configuration",
+        "description": "文件大小：配置 1 MiB，恰好上限成功、多 1 字节返回 FILE_TOO_LARGE。",
+        "status": "passed",
+        "seconds": 0.0091
+      },
+      {
+        "id": "test_create_job.CreateJobTests.test_commit_acknowledgement_loss_retains_committed_input",
+        "description": "提交确认丢失：保留已提交任务和输入文件，留下待投递标记。",
+        "status": "passed",
+        "seconds": 0.0357
+      },
+      {
+        "id": "test_create_job.CreateJobTests.test_dispatch_failure_when_database_update_also_fails",
+        "description": "队列失败且错误回写失败时，先前提交的待投递标记仍可用于排查。",
+        "status": "passed",
+        "seconds": 0.0312
+      },
+      {
+        "id": "test_create_job.CreateJobTests.test_insert_and_disk_failures_do_not_enqueue",
+        "description": "入库或文件保存失败返回 500；未持久化的输入被清理，不投递队列。",
+        "status": "passed",
+        "seconds": 0.0299
+      },
+      {
+        "id": "test_create_job.CreateJobTests.test_live_openapi_has_creation_contract",
+        "description": "正式应用的 OpenAPI 声明真实 POST、multipart 以及 201/400/500。",
+        "status": "passed",
+        "seconds": 0.023
+      },
+      {
+        "id": "test_create_job.CreateJobTests.test_real_upload_persists_file_hash_and_queue",
+        "description": "真实上传：201/PENDING、原名和 SHA-256 入库，Redis 中仅存任务 ID。",
+        "status": "passed",
+        "seconds": 0.0518
+      },
+      {
+        "id": "test_create_job.CreateJobTests.test_redis_acknowledgement_loss_does_not_retry",
+        "description": "Redis 已收消息但响应超时：不重复投递；CANCELED 任务不能进入 RUNNING。",
+        "status": "passed",
+        "seconds": 0.0356
+      },
+      {
+        "id": "test_create_job.CreateJobTests.test_redis_failure_cancels_pending_job",
+        "description": "Redis 实际连接失败：返回脱敏 500，任务 CANCELED 且留有文件级错误记录。",
+        "status": "passed",
+        "seconds": 0.0353
+      },
+      {
+        "id": "test_create_job.CreateJobTests.test_rejected_requests_have_no_side_effects",
+        "description": "无效文件/字段和超限文件不会创建任务、文件或队列消息。",
+        "status": "passed",
+        "seconds": 0.0416
+      },
+      {
+        "id": "test_create_job.CreateJobTests.test_successful_dispatch_with_cleanup_failure_still_returns_201",
+        "description": "已投递成功但标记清理失败：仍返回 201，避免客户端误认为失败而重传。",
+        "status": "passed",
+        "seconds": 0.0296
+      },
+      {
+        "id": "test_create_job.CreateJobTests.test_traversal_names_and_repeat_uploads_are_safe",
+        "description": "路径穿越文件名不会影响存储位置；重复上传生成不同 UUID，不覆盖文件。",
+        "status": "passed",
+        "seconds": 0.0605
+      },
+      {
+        "id": "test_create_job.CreateJobTests.test_uploaded_csv_is_readable_by_independent_process",
+        "description": "真实 API 保存 BOM 文件；独立后端进程按同一存储路径读取并规范化。",
+        "status": "passed",
+        "seconds": 0.1234
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_blank_lines_and_physical_line_numbers",
+        "description": "忽略空白物理行，保留引号逗号/换行；错误行号取记录起始物理行。",
+        "status": "passed",
+        "seconds": 0.0005
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_date_format_calendar_and_mysql_range",
+        "description": "严格日期格式、闰年及 MySQL DATE 上下界，拒绝隐式日期格式转换。",
+        "status": "passed",
+        "seconds": 0.0025
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_decimal_exactness_and_range",
+        "description": "金额精确到两位，最大值不溢出；负数、指数、超精度/范围等均拒绝。",
+        "status": "passed",
+        "seconds": 0.0018
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_default_and_configured_byte_limits",
+        "description": "默认 10 MiB 和配置 1 MiB 的等于/超限边界，按字节计算。",
+        "status": "passed",
+        "seconds": 0.1159
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_default_and_configured_row_limits_include_invalid_rows",
+        "description": "默认接受 10000 行、拒绝 10001；自定义上限包含非法行，不含空行。",
+        "status": "passed",
+        "seconds": 0.0616
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_duplicate_ids_first_valid_wins_and_scope_is_per_file",
+        "description": "大小写/空白规范化后去重；首个合法行获胜，下一次读取重置去重集合。",
+        "status": "passed",
+        "seconds": 0.0004
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_empty_and_invalid_encoding",
+        "description": "空文件、仅表头及空行被拒绝；UTF-16/GBK/尾部损坏字节不能被替换解码。",
+        "status": "passed",
+        "seconds": 0.0016
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_extension_read_failures_and_invalid_configuration",
+        "description": "不存在/无权限的文件被拒绝；CSV 大写后缀兼容既有上传规则。",
+        "status": "passed",
+        "seconds": 0.0007
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_external_id_format_and_boundaries",
+        "description": "标识长度 1/64 合法；65、非 ASCII 字母数字及空白/标点不合法。",
+        "status": "passed",
+        "seconds": 0.0009
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_headers_are_exact_and_first",
+        "description": "缺失、重复、错序、多列、少列、空白前缀和分号分隔的表头均拒绝。",
+        "status": "passed",
+        "seconds": 0.0008
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_malformed_quoting_is_file_error",
+        "description": "无法可靠确定记录边界的引号损坏不返回部分成功数据。",
+        "status": "passed",
+        "seconds": 0.0004
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_name_length_in_characters_and_large_field",
+        "description": "中文名按字符计数，128 合法；129 和超过 csv 默认字段上限均为行错误。",
+        "status": "passed",
+        "seconds": 0.0026
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_required_and_column_count",
+        "description": "各字段 trim 后为空均报必填错误，列数错误保留原始行并继续。",
+        "status": "passed",
+        "seconds": 0.0006
+      },
+      {
+        "id": "test_csv_source.CSVSourceTests.test_utf8_bom_normalization_and_native_types",
+        "description": "UTF-8/BOM、CRLF、中文与四字段 trim；金额保留两位，日期为 date。",
+        "status": "passed",
+        "seconds": 0.0003
+      },
+      {
+        "id": "test_database.DatabaseTests.test_csv_normalized_values_round_trip_in_mysql",
+        "description": "真实 CSV 规范化后存入 DECIMAL(12,2)/DATE，边界精确且金额越界被拒绝。",
+        "status": "passed",
+        "seconds": 0.0226
+      },
+      {
+        "id": "test_database.DatabaseTests.test_defaults_utc_and_state_transitions",
+        "description": "状态流转：PENDING → RUNNING → SUCCESS；跳步和重复更新不生效。",
+        "status": "passed",
+        "seconds": 0.0171
+      },
+      {
+        "id": "test_database.DatabaseTests.test_health_and_real_connection_failure",
+        "description": "连接示例：正常返回可用；连接端口 1 失败后返回 503，响应不含凭据。",
+        "status": "passed",
+        "seconds": 0.0201
+      },
+      {
+        "id": "test_database.DatabaseTests.test_record_precision_uppercase_and_uniqueness",
+        "description": "约束示例：1234567890.12 精确存储；重复标识、小写、负计数被拒绝。",
+        "status": "passed",
+        "seconds": 0.0146
+      },
+      {
+        "id": "test_database.DatabaseTests.test_repeat_initialization_preserves_schema_and_data",
+        "description": "重复初始化：先写入任务 a，再初始化两遍，表结构与任务保留。",
+        "status": "passed",
+        "seconds": 0.0492
+      },
+      {
+        "id": "test_database.DatabaseTests.test_rollback_and_atomic_failure_record",
+        "description": "事务示例：故意中断后回滚；失败状态与错误记录同时提交或回滚。",
+        "status": "passed",
+        "seconds": 0.0391
+      },
+      {
+        "id": "test_database.DatabaseTests.test_stable_pagination_filter_and_injection",
+        "description": "分页示例：同时间插入 a/b/c，每页 2 条，第一页 c/b、第二页 a。",
+        "status": "passed",
+        "seconds": 0.0196
+      },
+      {
+        "id": "test_database.DatabaseTests.test_week2_status_constraint_upgrades_without_data_loss",
+        "description": "从第二周四状态约束升级，保留旧任务；重复迁移后支持 PARTIAL_SUCCESS。",
+        "status": "passed",
+        "seconds": 0.06
+      },
+      {
+        "id": "test_job_states.JobStateTests.test_all_state_pairs_and_http_conflicts",
+        "description": "全部 64 个状态组合：合法转换更新原因/时间；非法转换 HTTP 409、日志且不改数据。",
+        "status": "passed",
+        "seconds": 1.4811
+      },
+      {
+        "id": "test_job_states.JobStateTests.test_concurrent_claims_only_one_wins",
+        "description": "两个真实数据库连接同时认领同一任务，仅一个成功。",
+        "status": "passed",
+        "seconds": 0.0207
+      },
+      {
+        "id": "test_job_states.JobStateTests.test_dispatch_failure_does_not_override_claimed_or_terminal_job",
+        "description": "投递确认丢失但任务已被领取/完成时，补偿不覆盖执行结果。",
+        "status": "passed",
+        "seconds": 0.0164
+      },
+      {
+        "id": "test_job_states.JobStateTests.test_week3_migration_and_new_status_queries",
+        "description": "旧五状态约束无损升级；三个新增状态可查询/筛选，重复初始化安全。",
+        "status": "passed",
+        "seconds": 0.1069
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_database_failure_is_safe_and_redis_is_not_required",
+        "description": "数据库真实连接失败时返回脱敏 500；查询不依赖 Redis。",
+        "status": "passed",
+        "seconds": 0.0338
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_detail_has_all_public_fields_and_null_times",
+        "description": "详情返回全部 13 个公开字段；内部路径、哈希和 updated_at 不会泄露。",
+        "status": "passed",
+        "seconds": 0.0236
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_detail_statistics_errors_and_completed_times",
+        "description": "详情读取真实统计、错误摘要和开始/结束时间，不用固定模拟值。",
+        "status": "passed",
+        "seconds": 0.031
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_empty_default_and_maximum_page_size",
+        "description": "空列表返回完整分页信息；105 条数据默认 20 条，最大页大小 100。",
+        "status": "passed",
+        "seconds": 0.0924
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_errors_database_failure_is_safe_and_redis_not_required",
+        "description": "错误查询不依赖 Redis；真实数据库连接失败返回脱敏 500。",
+        "status": "passed",
+        "seconds": 0.0239
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_errors_empty_missing_and_invalid_job",
+        "description": "已有任务无错误为 200 空页；缺失任务为 404，非法 ID 为 400。",
+        "status": "passed",
+        "seconds": 0.0369
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_errors_invalid_pagination_never_queries_database",
+        "description": "分页参数沿用既有严格整数校验，在访问数据库前返回统一 400。",
+        "status": "passed",
+        "seconds": 0.0149
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_errors_openapi_matches_public_contract_and_examples",
+        "description": "运行时文档包含分页限制、响应模型以及行级、文件级、空页和错误示例。",
+        "status": "passed",
+        "seconds": 0.0078
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_errors_paginate_with_defaults_maximum_and_empty_pages",
+        "description": "105 条错误默认取 20 条、最大取 100 条，超大页码仍返回正确总数。",
+        "status": "passed",
+        "seconds": 0.0809
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_errors_return_public_fields_json_and_utc",
+        "description": "错误的七个公开字段完整；保留原始 JSON、空值和 UTC 时间。",
+        "status": "passed",
+        "seconds": 0.0293
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_errors_sort_nulls_then_rows_then_ids_and_isolate_jobs",
+        "description": "空行号优先，同一行按 ID 稳定排序，跨页无重复且只查询指定任务。",
+        "status": "passed",
+        "seconds": 0.0462
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_invalid_parameters_never_query_database",
+        "description": "非法分页/状态返回 400，并在访问数据库之前拒绝。",
+        "status": "passed",
+        "seconds": 0.0159
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_missing_id_and_invalid_id",
+        "description": "不存在和 SQL 注入样式的 ID 返回 JOB_NOT_FOUND；超长 ID 返回 400。",
+        "status": "passed",
+        "seconds": 0.0311
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_runtime_openapi_documents_queries",
+        "description": "运行时 OpenAPI 声明列表、详情的真实模型、参数和 404 错误。",
+        "status": "passed",
+        "seconds": 0.0083
+      },
+      {
+        "id": "test_query_jobs.QueryJobTests.test_stable_order_and_status_filter",
+        "description": "同时间按 ID 倒序，新时间优先；状态筛选后 total 只统计匹配任务。",
+        "status": "passed",
+        "seconds": 0.0719
+      },
+      {
+        "id": "test_reporting.ReportingTests.test_subtest_failures_are_reported_on_parent_case",
+        "description": "边界子用例失败或异常时，父用例报告必须标记失败或异常。",
+        "status": "passed",
+        "seconds": 0.0011
+      },
+      {
+        "id": "test_worker.WorkerTests.test_all_batches_system_write_failure",
+        "description": "所有合法行系统写入失败：每批均回滚，逐行记错，总数等于失败数。",
+        "status": "passed",
+        "seconds": 0.1372
+      },
+      {
+        "id": "test_worker.WorkerTests.test_all_invalid_rows_fail_without_extra_file_error",
+        "description": "全行校验失败：FAILED，失败数按行统计，不额外伪造文件错误。",
+        "status": "passed",
+        "seconds": 0.0609
+      },
+      {
+        "id": "test_worker.WorkerTests.test_all_row_codes_persist_and_later_valid_rows_continue",
+        "description": "七类行错误完整落库，保留原始空白与字段，后续合法行入库且部分成功可查询。",
+        "status": "passed",
+        "seconds": 0.0988
+      },
+      {
+        "id": "test_worker.WorkerTests.test_batch_boundaries_and_committed_progress",
+        "description": "250 行事务边界；每批提交后独立连接可见准确进度，最后一批原子完成。",
+        "status": "passed",
+        "seconds": 0.4431
+      },
+      {
+        "id": "test_worker.WorkerTests.test_committed_batch_acknowledgement_loss_does_not_double_count",
+        "description": "首批/末批成功或中间失败批次的提交确认丢失，核对进度后继续，不重复计数。",
+        "status": "passed",
+        "seconds": 0.3209
+      },
+      {
+        "id": "test_worker.WorkerTests.test_duplicate_across_batches_uses_original_line_error",
+        "description": "跨 250 行边界的大小写重复仍为行校验错误，之后合法行继续入库。",
+        "status": "passed",
+        "seconds": 0.0812
+      },
+      {
+        "id": "test_worker.WorkerTests.test_error_insert_failure_rolls_back_records_and_prior_errors",
+        "description": "错误持久化失败时回滚业务记录及已写入错误，随后记录脱敏系统失败。",
+        "status": "passed",
+        "seconds": 0.081
+      },
+      {
+        "id": "test_worker.WorkerTests.test_file_errors_persist_without_row_numbers",
+        "description": "文件级五类错误及损坏引号落库：FAILED、空行号、无部分业务数据。",
+        "status": "passed",
+        "seconds": 0.6185
+      },
+      {
+        "id": "test_worker.WorkerTests.test_file_failure_status_and_error_are_atomic",
+        "description": "文件错误写入失败时 FAILED 更新一并回滚，不能留下无错误记录的失败状态。",
+        "status": "passed",
+        "seconds": 0.0618
+      },
+      {
+        "id": "test_worker.WorkerTests.test_file_preflight_errors_never_commit_earlier_batches",
+        "description": "超过一批的合法数据后出现文件级错误，所有业务记录仍为零。",
+        "status": "passed",
+        "seconds": 0.2107
+      },
+      {
+        "id": "test_worker.WorkerTests.test_final_batch_status_and_counts_rollback_together",
+        "description": "末批更新成功状态后发生事务错误，独立连接看不到假成功；回滚后记部分成功。",
+        "status": "passed",
+        "seconds": 0.1189
+      },
+      {
+        "id": "test_worker.WorkerTests.test_independent_worker_consumes_real_queue_and_stops",
+        "description": "独立 Worker 进程消费真实队列，重复/无效消息不影响后续任务，SIGTERM 正常退出。",
+        "status": "passed",
+        "seconds": 3.7026
+      },
+      {
+        "id": "test_worker.WorkerTests.test_live_http_api_and_worker_complete_all_terminal_scenarios",
+        "description": "独立 HTTP API 先返回并入队；真实 Worker 完成四类终态，数据库故障不阻塞后续任务。",
+        "status": "passed",
+        "seconds": 5.1529
+      },
+      {
+        "id": "test_worker.WorkerTests.test_middle_batch_unique_violation_rolls_back_only_that_batch",
+        "description": "第二批写入后触发真实唯一约束冲突：整批回滚，前后批保留，原行错误保留。",
+        "status": "passed",
+        "seconds": 0.1402
+      },
+      {
+        "id": "test_worker.WorkerTests.test_missing_and_nonpending_jobs_are_skipped",
+        "description": "不存在、FAILED、RUNNING 任务都不能被重复认领或误标成功。",
+        "status": "passed",
+        "seconds": 0.2884
+      },
+      {
+        "id": "test_worker.WorkerTests.test_missing_and_uncontrolled_files_fail_safely",
+        "description": "文件缺失或路径位于上传目录之外时 FAILED，写入文件级错误。",
+        "status": "passed",
+        "seconds": 0.1107
+      },
+      {
+        "id": "test_worker.WorkerTests.test_pending_recovery_only_requeues_stale_pending",
+        "description": "仅补投超过 60 秒的 PENDING，其他七状态和新任务不受影响；补投后限频。",
+        "status": "passed",
+        "seconds": 0.3072
+      },
+      {
+        "id": "test_worker.WorkerTests.test_pop_before_claim_failure_is_recovered",
+        "description": "消息已弹出但数据库领取失败：补投后可正常执行且重复消息不重复写入。",
+        "status": "passed",
+        "seconds": 0.0861
+      },
+      {
+        "id": "test_worker.WorkerTests.test_recovery_ack_loss_and_marker_failure_remain_retryable",
+        "description": "补投确认丢失或回写失败不会提前更新时间，后续可重试，重复投递只执行一次。",
+        "status": "passed",
+        "seconds": 0.12
+      },
+      {
+        "id": "test_worker.WorkerTests.test_recovery_does_not_overwrite_a_concurrent_cancellation",
+        "description": "扫描后发生取消，补投标记不能覆盖取消原因；残留消息不能执行。",
+        "status": "passed",
+        "seconds": 0.0709
+      },
+      {
+        "id": "test_worker.WorkerTests.test_running_commit_and_success_are_visible",
+        "description": "Worker 先提交 RUNNING 和首次开始时间，再读文件并提交 SUCCESS。",
+        "status": "passed",
+        "seconds": 0.0717
+      },
+      {
+        "id": "test_worker.WorkerTests.test_unrecoverable_error_persistence_preserves_prior_successes",
+        "description": "后批连错误明细都无法保存时终止，保留首批成功数据，剩余行计为失败。",
+        "status": "passed",
+        "seconds": 0.1045
+      },
+      {
+        "id": "test_worker_control.WorkerControlTests.test_cancel_api_state_contract",
+        "description": "取消 API 覆盖八状态、404 和 409；终态/重复请求不改数据。",
+        "status": "passed",
+        "seconds": 0.3917
+      },
+      {
+        "id": "test_worker_control.WorkerControlTests.test_child_start_and_exit_failures_are_recorded",
+        "description": "启动失败及进程无结果退出均记 FAILED，不遗留 RUNNING。",
+        "status": "passed",
+        "seconds": 0.1006
+      },
+      {
+        "id": "test_worker_control.WorkerControlTests.test_concurrency_timeout_releases_slots_and_child_processes",
+        "description": "两个 FIFO 读取同时阻塞，第三任务等待；超时杀进程释放槽位，重复消息不执行。",
+        "status": "passed",
+        "seconds": 5.0692
+      },
+      {
+        "id": "test_worker_control.WorkerControlTests.test_killed_transaction_rolls_back_before_failure",
+        "description": "真实子进程写入未提交记录后阻塞；超时终止会回滚，不留下业务数据。",
+        "status": "passed",
+        "seconds": 2.1024
+      },
+      {
+        "id": "test_worker_control.WorkerControlTests.test_running_cancel_preserves_committed_batch_and_other_jobs",
+        "description": "运行中取消实际阻塞子进程，保留已提交批次；其他任务独立成功且槽位可复用。",
+        "status": "passed",
+        "seconds": 2.5483
+      },
+      {
+        "id": "test_worker_control.WorkerControlTests.test_settings_default_and_validation",
+        "description": "默认并发按 CPU 限定在 2–4；显式配置生效，非正整数在启动时拒绝。",
+        "status": "passed",
+        "seconds": 0.0129
+      },
+      {
+        "id": "test_worker_shutdown.WorkerShutdownTests.test_delivery_at_shutdown_is_returned_and_claim_is_rolled_back",
+        "description": "阻塞弹出期间收到停止信号会归还消息；领取事务期间停止则回滚，不启动子进程。",
+        "status": "passed",
+        "seconds": 0.0667
+      },
+      {
+        "id": "test_worker_shutdown.WorkerShutdownTests.test_failed_final_write_is_reported_and_later_recovered",
+        "description": "最终状态回写失败时明确记录恢复需求、服务非零退出，数据库恢复后扫描修复。",
+        "status": "passed",
+        "seconds": 1.0798
+      },
+      {
+        "id": "test_worker_shutdown.WorkerShutdownTests.test_first_signal_sets_one_shared_deadline",
+        "description": "重复停止信号不能重置收尾期限，默认 30 秒。",
+        "status": "passed",
+        "seconds": 0.009
+      },
+      {
+        "id": "test_worker_shutdown.WorkerShutdownTests.test_inflight_task_can_finish_during_grace",
+        "description": "停止信号后给执行中任务时间完成，保留 SUCCESS，不领取下一任务。",
+        "status": "passed",
+        "seconds": 0.9451
+      },
+      {
+        "id": "test_worker_shutdown.WorkerShutdownTests.test_lost_claim_commit_acknowledgement_requires_recovery",
+        "description": "领取提交已成功但响应丢失时，停止不能假报全清理成功；恢复扫描能修复。",
+        "status": "passed",
+        "seconds": 0.0669
+      },
+      {
+        "id": "test_worker_shutdown.WorkerShutdownTests.test_parent_crash_stops_child_and_restart_recovers_task",
+        "description": "SIGKILL 父进程后管道关闭终止孤儿；重启扫描超时任务并继续处理新任务。",
+        "status": "passed",
+        "seconds": 2.4239
+      },
+      {
+        "id": "test_worker_shutdown.WorkerShutdownTests.test_recovery_preserves_progress_skips_live_and_locked_rows",
+        "description": "超时 RUNNING/CANCELING 恢复为 FAILED；保留数据，不碰新任务/终态/锁定批次，重复扫描幂等。",
+        "status": "passed",
+        "seconds": 0.269
+      },
+      {
+        "id": "test_worker_shutdown.WorkerShutdownTests.test_signals_stop_new_work_and_expire_all_inflight_jobs",
+        "description": "SIGTERM/SIGINT 均停止领取，两个阻塞任务共用 1 秒收尾期，退出后没有运行中任务。",
+        "status": "passed",
+        "seconds": 3.4642
+      }
+    ]
+  },
+  "project_checks": {
+    "passed": true,
+    "csv_tests_included_in_backend": 14,
+    "frontend_tests": 6,
+    "checks": [
+      "ruff",
+      "format",
+      "typecheck",
+      "production build",
+      "Compose config",
+      "OpenAPI consistency"
+    ]
+  },
+  "polling": {
+    "passed": true,
+    "cases": [
+      {
+        "name": "四个非终态均按固定 3 秒轮询并刷新统计",
+        "passed": true
+      },
+      {
+        "name": "四个终态停止定时器，首次加载终态也不轮询",
+        "passed": true
+      },
+      {
+        "name": "刷新失败保留数据，自动重试后清除错误",
+        "passed": true
+      },
+      {
+        "name": "首次网络失败仍自动恢复；手动刷新终态失败不重新轮询",
+        "passed": true
+      },
+      {
+        "name": "慢请求不重叠，完成后按下一固定时间点刷新",
+        "passed": true
+      },
+      {
+        "name": "StrictMode、手动重试、重复进入和任务切换均仅一个定时器",
+        "passed": true
+      },
+      {
+        "name": "卸载时取消慢请求，旧响应不会覆盖新任务",
+        "passed": true
+      }
+    ]
+  },
+  "browser_regression": {
+    "passed": true,
+    "cases": [
+      {
+        "name": "上传校验：后缀、大小、文件信息、名称上限",
+        "passed": true
+      },
+      {
+        "name": "创建中禁用、阻止重复提交、后端失败保留输入",
+        "passed": true
+      },
+      {
+        "name": "3 秒刷新状态和统计，三个终态均停止轮询",
+        "passed": true
+      },
+      {
+        "name": "切换任务、离开详情清理定时器，不再请求旧任务",
+        "passed": true
+      },
+      {
+        "name": "真实上传 → Worker → SUCCESS → 错误页面（正常）",
+        "passed": true
+      },
+      {
+        "name": "真实上传 → Worker → PARTIAL_SUCCESS → 错误页面（混合）",
+        "passed": true
+      },
+      {
+        "name": "真实上传 → Worker → FAILED → 错误页面（文件错误）",
+        "passed": true
+      },
+      {
+        "name": "错误页加载、失败、重试、空页、缺失任务",
+        "passed": true
+      },
+      {
+        "name": "列表筛选、分页、部分成功状态及移动端导航回归",
+        "passed": true
+      }
+    ]
+  },
+  "database_verification": {
+    "passed": true,
+    "verified_at": "2026-10-08T10:54:14.432152+00:00",
+    "cases": [
+      {
+        "sample": "sample-valid.csv",
+        "job_id": "25ca4876-67a2-4f88-b76e-f60589fc7926",
+        "status": "SUCCESS",
+        "counts": [
+          5,
+          5,
+          0
+        ],
+        "records": [
+          [
+            "S001",
+            "商品A",
+            "19.90",
+            "2026-01-01"
+          ],
+          [
+            "S002",
+            "商品B",
+            "29.50",
+            "2026-01-02"
+          ],
+          [
+            "S003",
+            "键盘-机械轴",
+            "19.00",
+            "2026-01-03"
+          ],
+          [
+            "S004",
+            "赠品_试用装",
+            "0.00",
+            "2026-01-04"
+          ],
+          [
+            "S005",
+            "显示器, 27 英寸",
+            "1299.50",
+            "2026-02-28"
+          ]
+        ],
+        "errors": [],
+        "passed": true
+      },
+      {
+        "sample": "sample-mixed.csv",
+        "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+        "status": "PARTIAL_SUCCESS",
+        "counts": [
+          22,
+          1,
+          21
+        ],
+        "records": [
+          [
+            "S1",
+            "商品",
+            "19.90",
+            "2026-01-01"
+          ]
+        ],
+        "errors": [
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 3,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E0",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.490000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 4,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E1",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.490000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 5,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E2",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.491000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 6,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E3",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.491000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 7,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E4",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.491000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 8,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E5",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.491000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 9,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E6",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.491000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 10,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E7",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.491000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 11,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E8",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.491000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 12,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E9",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.492000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 13,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E10",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.492000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 14,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E11",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.492000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 15,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E12",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.492000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 16,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E13",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.492000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 17,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E14",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.492000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 18,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E15",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.492000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 19,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E16",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.493000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 20,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E17",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.493000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 21,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E18",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.493000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 22,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E19",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.493000Z"
+          },
+          {
+            "job_id": "96b4b399-9e75-49eb-b6fe-2157e92e82fe",
+            "row_number": 23,
+            "field_name": "amount",
+            "error_code": "AMOUNT_INVALID",
+            "error_message": "amount 必须为非负普通十进制数，最多两位小数",
+            "raw_row": [
+              "E20",
+              "商品",
+              "-1",
+              "2026-01-01"
+            ],
+            "created_at": "2026-10-08T10:53:10.493000Z"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "sample": "sample-invalid-header.csv",
+        "job_id": "7d02fc29-0990-4177-a060-1618ef811aab",
+        "status": "FAILED",
+        "counts": [
+          0,
+          0,
+          0
+        ],
+        "records": [],
+        "errors": [
+          {
+            "job_id": "7d02fc29-0990-4177-a060-1618ef811aab",
+            "row_number": null,
+            "field_name": null,
+            "error_code": "CSV_HEADER_INVALID",
+            "error_message": "表头必须为 external_id,name,amount,record_date",
+            "raw_row": null,
+            "created_at": "2026-10-08T10:53:14.824000Z"
+          }
+        ],
+        "passed": true
+      }
+    ]
+  },
+  "http_worker_scenarios": [
+    {
+      "scenario": "success",
+      "job_id": "6334c436-a13f-4b86-9e51-5c3670dbbcd9",
+      "create_seconds": 0.065,
+      "id": "6334c436-a13f-4b86-9e51-5c3670dbbcd9",
+      "name": "success",
+      "status": "SUCCESS",
+      "created_at": "2026-10-08T10:51:28.367000Z",
+      "source_file_name": "success.csv",
+      "total_records": 501,
+      "success_records": 501,
+      "failed_records": 0,
+      "retry_count": 0,
+      "last_error_code": null,
+      "last_error_message": "所有有效记录写入成功",
+      "started_at": "2026-10-08T10:51:29.383000Z",
+      "finished_at": "2026-10-08T10:51:29.870000Z"
+    },
+    {
+      "scenario": "mixed",
+      "job_id": "585186a0-c035-411f-82c0-20efc178ea42",
+      "create_seconds": 0.0641,
+      "id": "585186a0-c035-411f-82c0-20efc178ea42",
+      "name": "mixed",
+      "status": "PARTIAL_SUCCESS",
+      "created_at": "2026-10-08T10:51:28.483000Z",
+      "source_file_name": "mixed.csv",
+      "total_records": 2,
+      "success_records": 1,
+      "failed_records": 1,
+      "retry_count": 0,
+      "last_error_code": "AMOUNT_INVALID",
+      "last_error_message": "amount 必须为非负普通十进制数，最多两位小数",
+      "started_at": "2026-10-08T10:51:29.948000Z",
+      "finished_at": "2026-10-08T10:51:30.345000Z"
+    },
+    {
+      "scenario": "file_error",
+      "job_id": "8ffe62c1-0fa1-4d25-850e-1f936dd51cb7",
+      "create_seconds": 0.0683,
+      "id": "8ffe62c1-0fa1-4d25-850e-1f936dd51cb7",
+      "name": "file_error",
+      "status": "FAILED",
+      "created_at": "2026-10-08T10:51:28.603000Z",
+      "source_file_name": "file_error.csv",
+      "total_records": 0,
+      "success_records": 0,
+      "failed_records": 0,
+      "retry_count": 0,
+      "last_error_code": "CSV_HEADER_INVALID",
+      "last_error_message": "表头必须为 external_id,name,amount,record_date",
+      "started_at": "2026-10-08T10:51:30.382000Z",
+      "finished_at": "2026-10-08T10:51:30.775000Z"
+    },
+    {
+      "scenario": "database_error",
+      "job_id": "5389ac17-6f02-4bb5-9241-5efe903ad1ac",
+      "create_seconds": 0.0692,
+      "id": "5389ac17-6f02-4bb5-9241-5efe903ad1ac",
+      "name": "database_error",
+      "status": "FAILED",
+      "created_at": "2026-10-08T10:51:28.725000Z",
+      "source_file_name": "database_error.csv",
+      "total_records": 2,
+      "success_records": 0,
+      "failed_records": 2,
+      "retry_count": 0,
+      "last_error_code": "BATCH_WRITE_FAILED",
+      "last_error_message": "第 1 批（源文件第 2–3 行）写入失败：数据检查约束冲突（MySQL 3819）；本批已回滚",
+      "started_at": "2026-10-08T10:51:30.817000Z",
+      "finished_at": "2026-10-08T10:51:31.226000Z"
+    },
+    {
+      "scenario": "after_error",
+      "job_id": "c1c199c2-bdf6-451a-a152-fd0f61df44c8",
+      "create_seconds": 0.0637,
+      "id": "c1c199c2-bdf6-451a-a152-fd0f61df44c8",
+      "name": "after_error",
+      "status": "SUCCESS",
+      "created_at": "2026-10-08T10:51:28.846000Z",
+      "source_file_name": "after_error.csv",
+      "total_records": 1,
+      "success_records": 1,
+      "failed_records": 0,
+      "retry_count": 0,
+      "last_error_code": null,
+      "last_error_message": "所有有效记录写入成功",
+      "started_at": "2026-10-08T10:51:31.250000Z",
+      "finished_at": "2026-10-08T10:51:31.653000Z"
+    }
+  ],
+  "source_sha256": {
+    "backend/app/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "backend/app/api_contract.py": "61bcdcbf3326e856e09532597bfc9d0de2a62cfe503a11bad87f3e096734e29f",
+    "backend/app/csv_source.py": "b0d6cd0736c251deba819ceb24dd7a562ba6bbd491be742e5db9be9ba0fb6acc",
+    "backend/app/database.py": "b08857c6a6520a1c6f6dbe91c7a0570910c7f90fd485d0f3b47875955131bbe7",
+    "backend/app/jobs.py": "d23448746cdb3ced2209ce80eae77db5ae7283475c48cf91b8681a5da5e7ce35",
+    "backend/app/main.py": "6605600912e2d9df913b8bb915c9999a4db5e4362b5cf8ef1b7b44300dbbfd22",
+    "backend/app/repository.py": "13420f88d25f051466ce03aa051a7693de0216ffe3e18754ef3bdf884984bff5",
+    "backend/app/worker.py": "d514bcec5757671563d01af2c770da297f5268a125965fe1e321e309149ce814",
+    "backend/tests/reporting.py": "2359d6c1fa3c363bb7841aa5ae7a0a81cfe2540a148386d0d6d4277760ab8671",
+    "backend/tests/test_api.py": "6520c1b60d26a7d025f32faa8e5522ed9b73324e413265a6ed08800bb1d50e08",
+    "backend/tests/test_create_job.py": "03a0cba12677d0905b28b618dffc500a06c61dad2f0af3b7a2bcf3b577d3684b",
+    "backend/tests/test_csv_source.py": "6c7e8c64f158a192a866c8600ab8c42fa4f035031e9157734d14cbeffa984d30",
+    "backend/tests/test_database.py": "b1bd8ba37c9588f636e53a16e11ff8e5ae97dad6159b597af3c5e0148ca41732",
+    "backend/tests/test_job_states.py": "caebb5037c574b82a4157936e9951ec640fddffe8ad5a3b65807b7b98dd8074f",
+    "backend/tests/test_query_jobs.py": "aa4fcc7185eb0a4d48799f9aca357f9a2003484852c146ad2e66493e2fab6e1f",
+    "backend/tests/test_reporting.py": "3563bedff6841b496124e8397b623a0be6135d72022793427dfe8b8a90b699c7",
+    "backend/tests/test_worker.py": "781c31096f0e7da01a9952a4f8be8f680394f47f6022217df9660415e1543106",
+    "backend/tests/test_worker_control.py": "8473b50abcc4ab8ed368a08131ccf948e7e49ce1ab81c97eec893c3c84f19c7c",
+    "backend/tests/test_worker_shutdown.py": "dfd651c8bfe595f8ef62059c439405032348c2a35d38fdb07ef30161b0e87c29",
+    "backend/tests/verify_browser.py": "ed3ad5391e581b6df4640f16ddcea120cc80f8de7229a1dca84e0a68ffc152f4",
+    "frontend/src/api.test.ts": "8296e919bfb95335b83cfa7956ff6be1e45d954908621dda4c9be0fbc8b64749",
+    "frontend/src/api.ts": "b67a9a4dd45ebc1b9962ea69a952b158d5dd39c10db6ca4da44d96c5a89c329d",
+    "frontend/src/main.tsx": "11fbc165eea176a8811caff2bf77c9ff8dc4feebcff3b426f8547b601267e943",
+    "frontend/src/style.css": "b31c77789983079a16100cd1eee30263b7ab3e38811cd0dfc131ae24284c3250",
+    "scripts/check-week03-pages.cjs": "854710212584c9558e8946e6fe9bb2d2acb3cdd3fb9d3a42cfe80e12be439ae5",
+    "scripts/check-week04-polling.cjs": "1b32a0240eeca5a23f13b8f964b86c025cb9db56a0f9d7f03852dbf7e007adbe"
+  }
+}

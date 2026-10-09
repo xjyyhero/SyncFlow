@@ -2,7 +2,15 @@
 
 数据同步与任务管理服务：用户上传 CSV，系统异步导入数据，并提供任务状态、统计和错误明细查询。
 
-已完成任务创建、查询、MySQL 数据访问及 Redis 队列。Week 3 第一至八节已将 CSV 读取、校验和错误记录接入真实 Worker，并提供错误明细分页 API 和页面：合法行写入 MySQL，非法行保留明细，任务产生准确的最终统计和成功/部分成功/失败状态。当前每 250 条非空记录独立提交；单批写入失败只回滚该批，保留前批成功数据并继续后批，按批更新统计。页面支持上传前校验、任务列表、详情自动刷新和错误明细分页。见 [Week 3 清单](docs/delivery/week-03-checklist.md)、[真实 Worker 验收记录](docs/delivery/week-03-worker.md)、[错误明细 API 验收记录](docs/delivery/week-03-errors-api.md)及 [React 页面验收记录](docs/delivery/week-03-pages.md)。
+当前已完成 Week 4：CSV 上传后异步入队，Worker 按配置并发执行，支持任务超时、取消、优雅停止与重启恢复。详情页每 3 秒刷新状态和统计，终态停止轮询，网络失败保留数据并自动重试。
+
+CSV 每 250 条非空记录独立提交，单批失败保留此前提交的数据；任务提供成功、部分成功、失败和取消结果，以及错误明细分页。完整自动重试调度留到第五周。
+
+## Week 4 交付入口
+
+- [功能演示：操作步骤与 15 张截图](docs/delivery/week-04-demo.md)
+- [验收报告与复跑命令](docs/delivery/week-04-tests.md)：96 项后端测试、6 项前端测试、7 组轮询检查、9 组页面检查及 3 个数据库对账样例通过。
+- [工作清单](docs/delivery/week-04-checklist.md)、[最终交付记录](docs/delivery/week-04-handoff.md)、[AI 自查](docs/delivery/week-04-review.md)
 
 ## 技术栈与目录
 
@@ -18,7 +26,7 @@ compose.yaml       五服务编排
 .env.example       本地配置示例
 ```
 
-需求说明见 [需求理解](docs/requirements/requirements-understanding.md)，任务进度见 [完整交付索引](docs/delivery/week-01-delivery.md)
+需求说明见 [需求理解](docs/requirements/requirements-understanding.md)，当前任务进度见 [Week 4 工作清单](docs/delivery/week-04-checklist.md)
 
 ## 设计文档
 
@@ -70,7 +78,7 @@ docker compose down -v
 
 ## 配置与数据库
 
-`.env.example` 将当前生效配置与未来预留项分开。MySQL、上传大小、单任务行数、存储路径和队列配置已接入；Worker 并发、任务超时、重试和幂等 TTL 仅预留。示例密码仅用于本地开发。详见 [配置表与部署说明](docs/deployment/local-v1.0.md)。
+`.env.example` 将当前生效配置与未来预留项分开。MySQL、上传大小、单任务行数、存储路径、队列、Worker 并发、任务超时和停止收尾配置均已接入；重试次数、退避间隔和幂等 TTL 仍为预留项。示例密码仅用于本地开发。详见 [配置表与部署说明](docs/deployment/local-v1.0.md)。
 
 Compose 首次初始化 MySQL 数据卷时自动创建 `MYSQL_DATABASE` 指定的数据库和 `MYSQL_USER` 用户。已有数据卷不会因修改这些配置而重新初始化。
 
@@ -87,13 +95,13 @@ docker compose exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u "$MYSQL_US
 docker compose exec redis redis-cli ping
 ```
 
-Week 2 的实际建表脚本为 [backend/app/schema.sql](backend/app/schema.sql)，创建 `sync_jobs`、`sync_records`、`sync_errors`。完整启动时 `mysql-init` 自动执行，成功后 API 与 Worker 才启动。单独初始化或重复执行：
+实际建表脚本为 [backend/app/schema.sql](backend/app/schema.sql)，创建 `sync_jobs`、`sync_records`、`sync_errors`。完整启动时 `mysql-init` 自动执行，成功后 API 与 Worker 才启动。单独初始化或重复执行：
 
 ```sh
 docker compose run --build --rm mysql-init
 ```
 
-初始化保留现有数据；会将旧任务状态约束升级为支持 PARTIAL_SUCCESS 的五状态约束，重复执行安全。连接设置 UTC、严格 SQL 模式和 5 秒连接超时。MySQL 配置来自 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD`。
+初始化保留现有数据；会将旧任务状态约束升级为支持 RETRYING、CANCELING、CANCELED 等全部八种状态的约束，重复执行安全。连接设置 UTC、严格 SQL 模式和默认 5 秒连接/读写超时；Worker 监控查询使用 1 秒超时。MySQL 配置来自 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DATABASE`、`MYSQL_USER`、`MYSQL_PASSWORD`。
 
 ## 本机开发环境
 
@@ -176,10 +184,27 @@ curl -X POST http://127.0.0.1:8000/api/v1/jobs \
 
 成功返回 201，data 包含 id、name、PENDING 状态及创建时间，meta 为 `{}`。名称可省略，最长 128 字符。仅接收 CSV，默认上限 10 MiB，使用 `MAX_UPLOAD_FILE_SIZE_MB` 调整。
 
-Compose 使用 `uploads` 持久卷：API 写入 `/app/uploads`，Worker 同路径只读挂载。本机运行默认保存到 `var/uploads`，可通过 `UPLOAD_DIR` 配置。原始文件名只存元数据，本地存储名称由 UUID 生成。`REDIS_ADDR` 沿用原配置（也支持 Redis URL），`REDIS_JOB_QUEUE` 默认 `syncflow:jobs`；Worker 从该列表 BLPOP 取任务 ID，通过条件更新将 PENDING 改为 RUNNING，完整预检 CSV 后分批处理，逐批原子保存业务数据、错误和统计，末批同时提交终态；文件错误在写入前直接记录为 FAILED。BLPOP 暂无崩溃恢复或自动重试，异常退出后的任务需要人工检查。详见 [Week 3 Worker 验收记录](docs/delivery/week-03-worker.md)。
+Compose 使用 `uploads` 持久卷：API 写入 `/app/uploads`，Worker 同路径只读挂载。本机运行默认保存到 `var/uploads`，可通过 `UPLOAD_DIR` 配置。原始文件名只存元数据，本地存储名称由 UUID 生成。`REDIS_ADDR` 沿用原配置（也支持 Redis URL），`REDIS_JOB_QUEUE` 默认 `syncflow:jobs`；Worker 从该列表 BLPOP 取任务 ID，通过条件更新将 PENDING 改为 RUNNING，完整预检 CSV 后分批处理，逐批原子保存业务数据、错误和统计，末批同时提交终态；文件错误在写入前直接记录为 FAILED。Week 4 已增加 PENDING 扫描补投：Worker 启动时及每 30 秒的任务间隙检查超过 60 秒未更新的待领取任务，每轮最多 100 条；任务子进程异常退出会由监控者记录失败；整个 Worker 服务异常退出后，由启动及定期扫描将超时 RUNNING / CANCELING 任务标记失败并保留已提交数据。详见 [Week 4 队列与补偿策略](docs/delivery/week-04-queue.md)。
 
-入队失败会记录任务失败及文件级错误；详情见 [创建任务交付记录](docs/delivery/week-02-create-job.md)。自动验证继续使用 `python3 scripts/review-db.py`，所有测试写操作仅发生在独立 MySQL、Redis 和临时文件目录中。
+入队失败会取消仍为 PENDING 的任务并记录文件级错误，避免非法的 PENDING → FAILED 转换；数据库回写失败时保留标记，供扫描补投。详情见 [Week 4 第二节交付记录](docs/delivery/week-04-queue.md)。自动验证继续使用 `python3 scripts/review-db.py`，所有测试写操作仅发生在独立 MySQL、Redis 和临时文件目录中。
 
+## Worker 并发、超时与取消
+
+`WORKER_CONCURRENCY` 控制每个 Worker 服务的并发任务数；未设置时按 CPU 核数取 2–4。`JOB_TIMEOUT_SECONDS` 默认 300 秒，两项均须为正整数。每个消费者独立取任务，并在独立子进程中执行 CSV 处理；超时停止并回收子进程，任务标记为 FAILED，已提交数据保留。
+
+```sh
+curl -X POST 'http://127.0.0.1:8000/api/v1/jobs/JOB_ID/cancel'
+```
+
+等待中的任务直接进入 CANCELED；执行中的任务先返回 CANCELING，Worker 停止执行后进入 CANCELED。终态或重复取消返回 409，不存在返回 404。详情见 [Week 4 第三节交付记录](docs/delivery/week-04-worker-control.md)。服务停止和恢复方式见下节。
+
+## Worker 优雅停止与重启恢复
+
+收到 SIGTERM / SIGINT 后停止领取新任务，已执行任务共用 WORKER_SHUTDOWN_TIMEOUT_SECONDS 指定的收尾期（默认 30 秒）；到期后终止并回收子进程，记录 FAILED 和停止原因。重复信号不延长期限，已提交数据保留。
+
+Docker 使用 WORKER_STOP_GRACE_SECONDS（默认 45 秒）等待应用清理；调整应用收尾期时，此值应至少比它多 15 秒。父进程异常退出会关闭专用管道，子进程随之退出。重启及定期扫描会将已超过 JOB_TIMEOUT_SECONDS 的 RUNNING / CANCELING 任务标为 FAILED，不自动重放任务。数据库无法回写时服务明确报错并以非零状态退出，恢复后由扫描修复。
+
+详见 [Week 4 第四节交付记录](docs/delivery/week-04-shutdown.md)。
 
 ## 查询任务
 
@@ -191,7 +216,7 @@ curl 'http://127.0.0.1:8000/api/v1/jobs?page=1&page_size=20&status=PENDING'
 curl 'http://127.0.0.1:8000/api/v1/jobs/任务ID'
 ```
 
-详情包含公开任务字段、记录统计、最近错误和 UTC 时间；内部存储路径不返回。任务不存在返回 404 JOB_NOT_FOUND。列表支持五种状态筛选（含 PARTIAL_SUCCESS），page_size 最大 100，非法参数返回 400 INVALID_REQUEST。空页返回空数组及正确的 meta.total。详见 [任务查询交付记录](docs/delivery/week-02-query-jobs.md)。
+详情包含公开任务字段、记录统计、最近错误和 UTC 时间；内部存储路径不返回。任务不存在返回 404 JOB_NOT_FOUND。列表支持全部八种状态筛选（含 RETRYING、CANCELING、CANCELED），page_size 最大 100，非法参数返回 400 INVALID_REQUEST。空页返回空数组及正确的 meta.total。详见 [任务查询交付记录](docs/delivery/week-02-query-jobs.md)。
 
 查询错误明细（将 `JOB_ID` 替换为创建接口返回的任务 ID）：
 
@@ -203,11 +228,11 @@ curl 'http://127.0.0.1:8000/api/v1/jobs/JOB_ID/errors?page=1&page_size=20'
 
 ### React 查询页面
 
-访问 http://127.0.0.1:5173/ 查看任务；`/jobs/new` 上传创建并展示所选文件信息，前端限制 CSV 和默认 10 MB。`/jobs/:jobId` 查看详情，处理中每次请求完成后等待 3 秒自动刷新，成功、部分成功或失败时停止；`/jobs/:jobId/errors` 查看错误并分页，文件级错误显示空行号 `-`。详情提供错误入口，文件级失败也可进入。
+访问 http://127.0.0.1:5173/ 查看任务；`/jobs/new` 上传创建并展示所选文件信息，前端限制 CSV 和默认 10 MB。`/jobs/:jobId` 查看详情，PENDING / RUNNING / RETRYING / CANCELING 时每 3 秒自动刷新，成功、部分成功、失败或取消后停止；刷新失败保留已有数据并继续重试，离开页面清理定时器并取消请求；`/jobs/:jobId/errors` 查看错误并分页，文件级错误显示空行号 `-`。详情提供错误入口，文件级失败也可进入。
 
-状态筛选和分页同步 URL，时间按浏览器本地时区显示。前端客户端与响应类型集中在 `frontend/src/api.ts`。运行 `node --test frontend/src/api.test.ts` 验证查询参数、上传边界、终态、时间格式和 API 错误处理；`sh scripts/check.sh` 同时执行这些测试及类型检查、生产构建。真实浏览器上传、轮询及导航验收见 [第六节交付记录](docs/delivery/week-03-pages.md)。
+状态筛选和分页同步 URL，时间按浏览器本地时区显示。前端客户端与响应类型集中在 `frontend/src/api.ts`。运行 `node --test frontend/src/api.test.ts` 验证查询参数、上传边界、终态、时间格式和 API 错误处理；`sh scripts/check.sh` 同时执行这些测试及类型检查、生产构建。真实浏览器上传及导航验收见 [Week 3 第六节交付记录](docs/delivery/week-03-pages.md)，最新轮询验收见 [Week 4 第五节交付记录](docs/delivery/week-04-polling.md)。
 
-第七节测试验收已完成：74 项后端测试、6 项前端测试、9 组浏览器验收和 3 类固定样例数据库对账通过。查看 [测试报告、复跑命令与截图](docs/delivery/week-03-tests.md) 和 [样例及预期](samples/README.md)。
+最新验证结果见 [Week 4 测试报告](docs/delivery/week-04-tests.md)，输入文件及预期结果见 [样例说明](samples/README.md)。Week 3 历史验收记录保留在 [Week 3 测试报告](docs/delivery/week-03-tests.md)。
 
 ## V1.0 本地发布包
 

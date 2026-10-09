@@ -1,8 +1,24 @@
 """Parameterized SQL only; callers own transactions and business decisions."""
 
 import json
+import logging
+from typing import get_args
 
-JOB_STATUSES = {"PENDING", "RUNNING", "SUCCESS", "PARTIAL_SUCCESS", "FAILED"}
+from app.api_contract import APIError, JobStatus
+
+logger = logging.getLogger(__name__)
+JOB_STATUSES = set(get_args(JobStatus))
+TRANSITIONS = {
+    "PENDING": {"RUNNING", "CANCELED"},
+    "RUNNING": {"SUCCESS", "PARTIAL_SUCCESS", "RETRYING", "FAILED", "CANCELING"},
+    "RETRYING": {"PENDING", "FAILED", "CANCELED"},
+    "CANCELING": {"CANCELED", "FAILED"},
+    "SUCCESS": set(),
+    "PARTIAL_SUCCESS": set(),
+    "FAILED": set(),
+    "CANCELED": set(),
+}
+TERMINAL_STATUSES = {status for status, targets in TRANSITIONS.items() if not targets}
 
 
 def create_job(db, *, job_id, name, source_file_name, stored_file_path, file_sha256):
@@ -90,26 +106,101 @@ def list_job_errors(db, job_id, *, page=1, page_size=20):
         return result
 
 
-def start_job(db, job_id):
+def transition_job(
+    db, job_id, status, *, error_message, error_code=None, expected_status=None
+):
+    """Guard every state change in SQL; caller owns commit/rollback.
+
+    expected_status additionally guards actions tied to one observed state.
+    Worker claiming handles conflicts as a normal duplicate-message skip.
+    """
+    if not error_message or not error_message.strip():
+        raise ValueError("A transition reason is required")
+    sources = sorted(
+        source
+        for source, targets in TRANSITIONS.items()
+        if status in targets and (expected_status is None or source == expected_status)
+    )
     with db.cursor() as cursor:
+        if sources:
+            placeholders = ", ".join(["%s"] * len(sources))
+            cursor.execute(
+                f"""UPDATE sync_jobs SET status = %s,
+                    updated_at = CURRENT_TIMESTAMP(3),
+                    started_at = IF(%s, CURRENT_TIMESTAMP(3), started_at),
+                    finished_at = IF(%s, CURRENT_TIMESTAMP(3), NULL),
+                    last_error_code = %s, last_error_message = %s
+                    WHERE id = %s AND status IN ({placeholders})""",
+                (
+                    status,
+                    status == "RUNNING",
+                    status in TERMINAL_STATUSES,
+                    error_code,
+                    error_message,
+                    job_id,
+                    *sources,
+                ),
+            )
+            if cursor.rowcount == 1:
+                logger.info(
+                    "job_id=%s status=%s reason=%s", job_id, status, error_message
+                )
+                return True
+        # Locking read sees the latest committed status, even under REPEATABLE READ.
         cursor.execute(
-            """UPDATE sync_jobs SET status = 'RUNNING',
-               started_at = COALESCE(started_at, CURRENT_TIMESTAMP(3))
-               WHERE id = %s AND status = 'PENDING'""",
-            (job_id,),
+            "SELECT status FROM sync_jobs WHERE id = %s FOR UPDATE", (job_id,)
         )
-        return cursor.rowcount == 1
+        current = cursor.fetchone()
+    if current is None:
+        raise APIError("JOB_NOT_FOUND")
+    logger.warning(
+        "job_id=%s illegal_transition=%s->%s expected=%s",
+        job_id,
+        current[0],
+        status,
+        expected_status,
+    )
+    raise APIError("INVALID_JOB_TRANSITION")
+
+
+def start_job(db, job_id):
+    try:
+        return transition_job(db, job_id, "RUNNING", error_message="Worker 已领取任务")
+    except APIError as error:
+        if error.code not in {"JOB_NOT_FOUND", "INVALID_JOB_TRANSITION"}:
+            raise
+        return False
 
 
 def complete_job(db, job_id):
-    with db.cursor() as cursor:
+    return transition_job(db, job_id, "SUCCESS", error_message="所有有效记录写入成功")
+
+
+def request_cancel(db, job_id):
+    # Serialize cancellation with claim and batch commit; never overwrite a result.
+    with db.cursor(dictionary=True) as cursor:
         cursor.execute(
-            """UPDATE sync_jobs SET status = 'SUCCESS',
-               finished_at = CURRENT_TIMESTAMP(3)
-               WHERE id = %s AND status = 'RUNNING'""",
-            (job_id,),
+            "SELECT status FROM sync_jobs WHERE id = %s FOR UPDATE", (job_id,)
         )
-        return cursor.rowcount == 1
+        row = cursor.fetchone()
+    if row is None:
+        raise APIError("JOB_NOT_FOUND")
+    status = "CANCELING" if row["status"] == "RUNNING" else "CANCELED"
+    if row["status"] == "CANCELING":
+        # A second request must not claim the running process has stopped.
+        logger.warning("job_id=%s cancellation already requested", job_id)
+        raise APIError("INVALID_JOB_TRANSITION")
+    transition_job(
+        db,
+        job_id,
+        status,
+        expected_status=row["status"],
+        error_code="CANCEL_REQUESTED" if status == "CANCELING" else "JOB_CANCELED",
+        error_message="已请求取消，等待 Worker 安全停止"
+        if status == "CANCELING"
+        else "任务已取消",
+    )
+    return get_job(db, job_id)
 
 
 def add_records(db, job_id, records):
@@ -167,22 +258,31 @@ def save_csv_batch(db, job_id, rows, *, offset, total):
             }
         )
         if not failed:
-            last_error = {}
+            last_error = {"error_code": None, "error_message": "正在写入记录"}
+            if end == total:
+                last_error["error_message"] = "所有有效记录写入成功"
         cursor.execute(
-            """UPDATE sync_jobs SET status = %s, total_records = %s,
+            """UPDATE sync_jobs SET total_records = %s,
                success_records = %s, failed_records = %s,
                last_error_code = %s, last_error_message = %s,
-               finished_at = IF(%s, CURRENT_TIMESTAMP(3), NULL) WHERE id = %s""",
+               updated_at = CURRENT_TIMESTAMP(3) WHERE id = %s""",
             (
-                status,
                 total,
                 success,
                 failed,
                 last_error.get("error_code"),
                 last_error.get("error_message"),
-                end == total,
                 job_id,
             ),
+        )
+    if end == total:
+        transition_job(
+            db,
+            job_id,
+            status,
+            error_code=last_error.get("error_code"),
+            error_message=last_error.get("error_message") or "所有有效记录写入成功",
+            expected_status="RUNNING",
         )
     return get_job(db, job_id)
 
@@ -218,25 +318,43 @@ def add_error(
 
 def fail_job(db, job_id, *, error_code, error_message, total_records=None):
     """Caller transaction makes the status update and error insert atomic."""
-    with db.cursor() as cursor:
-        cursor.execute(
-            """UPDATE sync_jobs SET status = 'FAILED', last_error_code = %s,
-               last_error_message = %s, finished_at = CURRENT_TIMESTAMP(3),
-               total_records = COALESCE(%s, total_records),
-               failed_records = IF(%s IS NULL, failed_records, %s - success_records)
-               WHERE id = %s AND status IN ('PENDING', 'RUNNING')""",
-            (
-                error_code,
-                error_message,
-                total_records,
-                total_records,
-                total_records,
-                job_id,
-            ),
-        )
-        if cursor.rowcount != 1:
-            return False
+    transition_job(
+        db, job_id, "FAILED", error_code=error_code, error_message=error_message
+    )
+    if total_records is not None:
+        with db.cursor() as cursor:
+            cursor.execute(
+                """UPDATE sync_jobs SET total_records = %s,
+                   failed_records = %s - success_records WHERE id = %s""",
+                (total_records, total_records, job_id),
+            )
     add_error(db, job_id=job_id, error_code=error_code, error_message=error_message)
+    return True
+
+
+def cancel_dispatch(db, job_id):
+    """A failed/ambiguous publish may only cancel a still-pending task."""
+    try:
+        transition_job(
+            db,
+            job_id,
+            "CANCELED",
+            expected_status="PENDING",
+            error_code="QUEUE_DISPATCH_FAILED",
+            error_message="任务队列投递失败，已取消尚未开始的任务",
+        )
+    except APIError as error:
+        if error.code != "INVALID_JOB_TRANSITION":
+            raise
+        # Redis may have accepted the message before losing its acknowledgement.
+        # If a worker claimed it, preserve that worker's state and result.
+        return False
+    add_error(
+        db,
+        job_id=job_id,
+        error_code="QUEUE_DISPATCH_FAILED",
+        error_message="任务队列投递失败，已取消尚未开始的任务",
+    )
     return True
 
 
@@ -254,5 +372,48 @@ def clear_dispatch_pending(db, job_id):
         cursor.execute(
             """UPDATE sync_jobs SET last_error_code = NULL, last_error_message = NULL
                WHERE id = %s AND last_error_code = 'QUEUE_DISPATCH_PENDING'""",
+            (job_id,),
+        )
+
+
+def stale_pending_jobs(db):
+    """Bound each recovery pass; MySQL is the source of truth for missing messages."""
+    with db.cursor(dictionary=True) as cursor:
+        cursor.execute(
+            """SELECT id FROM sync_jobs WHERE status = 'PENDING'
+               AND updated_at < CURRENT_TIMESTAMP(3) - INTERVAL 60 SECOND
+               ORDER BY updated_at, id LIMIT 100"""
+        )
+        return cursor.fetchall()
+
+
+def fail_expired_jobs(db, timeout_seconds):
+    """Fence overdue executions without replay; skip batches currently committing."""
+    with db.cursor() as cursor:
+        cursor.execute(
+            """SELECT id FROM sync_jobs WHERE status IN ('RUNNING', 'CANCELING')
+               AND COALESCE(started_at, updated_at)
+                   < CURRENT_TIMESTAMP(3) - INTERVAL %s SECOND
+               ORDER BY started_at, id LIMIT 100 FOR UPDATE SKIP LOCKED""",
+            (timeout_seconds,),
+        )
+        ids = [row[0] for row in cursor.fetchall()]
+    for job_id in ids:
+        fail_job(
+            db,
+            job_id,
+            error_code="WORKER_EXECUTION_EXPIRED",
+            error_message="恢复扫描发现执行已超时，任务已终止，保留已提交数据",
+        )
+    return ids
+
+
+def mark_redispatched(db, job_id):
+    with db.cursor() as cursor:
+        cursor.execute(
+            """UPDATE sync_jobs SET updated_at = CURRENT_TIMESTAMP(3),
+               last_error_code = 'QUEUE_REDISPATCHED',
+               last_error_message = '等待领取超时，任务已重新投递'
+               WHERE id = %s AND status = 'PENDING'""",
             (job_id,),
         )

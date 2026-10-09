@@ -1,4 +1,4 @@
-# API 响应与参数契约（Week 2 / Week 3）
+# API 响应与参数契约（Week 2 / Week 3 / Week 4）
 
 当前契约为 [openapi.json](openapi.json)，由共享 Python 模型生成，使用 OpenAPI 3.1。历史 Week 1 提案保留在 [openapi-week-01.json](openapi-week-01.json)；其中的 202/413/422、QUEUED 和旧字段名不适用于本周接口。
 
@@ -35,6 +35,7 @@
 | 400 | INVALID_FILE_EXTENSION | 文件名扩展名不是 `.csv`（大小写不敏感） |
 | 400 | FILE_TOO_LARGE | 文件字节数超过配置上限 |
 | 404 | JOB_NOT_FOUND | 业务层查不到任务，抛出 `APIError("JOB_NOT_FOUND")` |
+| 409 | INVALID_JOB_TRANSITION | 非法状态转换，保留当前状态并记录日志 |
 | 500 | INTERNAL_ERROR | 数据库异常、未知内部异常、响应字段校验失败 |
 | 503 | DATABASE_UNAVAILABLE | `/readyz` 无法连接数据库，保留健康检查约定 |
 | 404 | NOT_FOUND | 请求未挂载的路由；与已存在业务路由中的任务缺失区分 |
@@ -52,7 +53,7 @@ FastAPI 请求参数校验默认的 422 已统一映射为 400，OpenAPI 也不�
 | --- | --- | --- |
 | page | 1 | 十进制整数，至少 1；拒绝小数、科学计数、布尔和空字符串 |
 | page_size | 20 | 十进制整数，范围 1–100 |
-| status | null | 可省略；提供时仅允许 PENDING / RUNNING / SUCCESS / PARTIAL_SUCCESS / FAILED |
+| status | null | 可省略；提供时仅允许 PENDING / RUNNING / RETRYING / SUCCESS / PARTIAL_SUCCESS / FAILED / CANCELING / CANCELED |
 
 ### 创建任务表单
 
@@ -89,11 +90,11 @@ PYTHONPATH=backend backend/.venv/bin/python -m unittest discover -s backend/test
 3. 提交 PENDING 任务和 `QUEUE_DISPATCH_PENDING` 最近错误标记，再向 Redis 列表 `REDIS_JOB_QUEUE` 执行 RPUSH，消息仅为任务 ID。
 4. 投递确认后清除标记，返回 `201 {data:{id,name,status,created_at},meta:{}}`，不等待 Worker。
 
-Redis 连接和命令超时均为 3 秒，发布不自动重试，避免确认丢失后重复入队。投递失败返回 `500 INTERNAL_ERROR`；任务更新为 FAILED，写入 `QUEUE_DISPATCH_FAILED` 文件级错误并记录结束时间。若数据库也无法回写，已提交的待投递标记仍留在任务上，日志包含 job_id，便于人工恢复。本周不实现自动补投。
+Redis 连接和命令超时均为 3 秒，发布不自动重试，避免确认丢失后重复入队。投递失败返回 `500 INTERNAL_ERROR`；仍为 PENDING 的任务更新为 CANCELED，写入 `QUEUE_DISPATCH_FAILED` 文件级错误并记录结束时间。若数据库也无法回写，已提交的待投递标记仍留在任务上，日志包含 job_id，便于追溯；第四周新增 Worker 扫描，补投超过 60 秒未更新的 PENDING 任务。
 
 数据库提交结果不明确时，先重新查询：确认任务不存在才删除上传文件；已入库或仍无法确认时保留输入，避免误删。若发布成功但清理标记失败，仍返回 201；标记表示尚未完成确认记录，不等同于 Redis 一定没有消息。
 
-Redis 可能已接受消息但响应丢失；这种情况下任务会标 FAILED，队列中可能留有该 ID。Worker 通过 `start_job` 的 PENDING 条件更新判断是否可处理，忽略无法认领的任务。该实现不承诺跨 MySQL、Redis、文件系统的原子提交。
+Redis 可能已接受消息但响应丢失；这种情况下仍为 PENDING 的任务会标 CANCELED，队列中可能留有该 ID；若 Worker 已领取或完成，保留其状态。Worker 通过 `start_job` 的 PENDING 条件更新判断是否可处理，忽略无法认领的任务。该实现不承诺跨 MySQL、Redis、文件系统的原子提交。
 
 ## 任务查询接口
 
@@ -113,8 +114,14 @@ Redis 可能已接受消息但响应丢失；这种情况下任务会标 FAILED�
 
 ## CSV Worker（Week 3 第四节）
 
-独立 Compose 服务从 Redis 列表阻塞获取任务 ID，通过条件更新认领 PENDING 任务并提交 RUNNING，首次 started_at 保留。读取受控上传目录中的 CSV，规范化合法行并保存行错误；完整文件预检后，每 250 条非空记录独立提交数据、错误与累计统计，最后一批同时提交终态和结束时间。单批系统失败记录 BATCH_WRITE_FAILED 并继续后续批次。终态包括 SUCCESS、PARTIAL_SUCCESS、FAILED。文件错误原子写入 FAILED 与对应错误记录；文件缺失/目录越界为 FILE_UNREADABLE，系统失败为 WORKER_PROCESSING_FAILED。重复消息或不存在的任务跳过。API 与 Worker 的日志均包含 job_id；共享 uploads 卷在 Worker 中只读。
+独立 Compose 服务从 Redis 列表阻塞获取任务 ID，通过条件更新认领 PENDING 任务并提交 RUNNING，记录本次 started_at。读取受控上传目录中的 CSV，规范化合法行并保存行错误；完整文件预检后，每 250 条非空记录独立提交数据、错误与累计统计，最后一批同时提交终态和结束时间。单批系统失败记录 BATCH_WRITE_FAILED 并继续后续批次。终态包括 SUCCESS、PARTIAL_SUCCESS、FAILED、CANCELED。文件错误原子写入 FAILED 与对应错误记录；文件缺失/目录越界为 FILE_UNREADABLE，系统失败为 WORKER_PROCESSING_FAILED。重复消息或不存在的任务跳过。API 与 Worker 的日志均包含 job_id；共享 uploads 卷在 Worker 中只读。
 
-错误明细与验收见 [Week 3 校验交付记录](../delivery/week-03-validation.md)。分批事务和运行期间统计更新已完成，详见 [第三节验收记录](../delivery/week-03-batches.md)。当前 BLPOP 不提供消息确认或崩溃恢复；进程被强制终止、数据库不可用时需要人工核查已出队任务，自动恢复与重试后续实现。
+错误明细与验收见 [Week 3 校验交付记录](../delivery/week-03-validation.md)。分批事务和运行期间统计更新已完成，详见 [第三节验收记录](../delivery/week-03-batches.md)。BLPOP 移除消息，数据库 RUNNING 提交确认领取，终态提交确认处理结果。第四周新增待领取任务扫描补投；第四节已实现优雅停止和超时 RUNNING / CANCELING 扫描恢复，详见[停止与恢复策略](../delivery/week-04-shutdown.md)。
 
 第四节已完成独立 HTTP API 与 Worker 端到端验收，覆盖成功、部分成功、文件失败与真实数据库写入失败；日志补充处理阶段和批次进度，见 [Worker 验收记录](../delivery/week-03-worker.md)。
+
+## 取消任务（Week 4 第三节）
+
+`POST /api/v1/jobs/{job_id}/cancel` 返回 HTTP 200 和 `SuccessResponse[JobDetail]`。PENDING / RETRYING 直接进入 CANCELED；RUNNING 进入 CANCELING，待 Worker 回收执行子进程后变为 CANCELED。200 表示请求已处理，不保证运行中任务已经停止。终态及重复取消返回 409 INVALID_JOB_TRANSITION；不存在返回 404 JOB_NOT_FOUND；参数非法返回 400，数据库异常返回 500。
+
+取消与批次提交通过任务行锁串行化，保留已提交数据和进度。状态与结果可继续通过任务详情查询。实现及验证见[第三节交付记录](../delivery/week-04-worker-control.md)。
