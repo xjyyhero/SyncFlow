@@ -240,4 +240,4 @@ python3 scripts/package-release.py
 
 ## Week 4 功能演示
 
-[截图演示与操作说明](docs/delivery/week-04-demo.md) · [完整验收报告](docs/delivery/week-04-tests.md) · [Week 4 工作清单](docs/delivery/week-04-checklist.md)
+[截图演示与操作说明](docs/delivery/week-04-demo.md) · [完整验收报告](docs/delivery/week-04-tests.md) · [Week 4 工作清单](docs/delivery/week-04-checklist.md) · [最终交付记录](docs/delivery/week-04-handoff.md) · [AI 自查](docs/delivery/week-04-review.md)

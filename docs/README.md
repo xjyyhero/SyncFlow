@@ -20,4 +20,4 @@ V1.0：[本地部署说明](deployment/local-v1.0.md)、[发布包与部署验�
 
 第九节：[PR、AI Review 与发布交接](delivery/week-03-handoff.md)。
 
-第四周：[Week 4 工作清单](delivery/week-04-checklist.md)、[第一节：任务状态机](delivery/week-04-state-machine.md)、[第二节：队列与异步投递](delivery/week-04-queue.md)、[第三节：并发、超时与取消](delivery/week-04-worker-control.md)、[第四节：优雅停止与重启恢复](delivery/week-04-shutdown.md)、[第五节：React 详情页轮询](delivery/week-04-polling.md)、[第六节：测试与验收](delivery/week-04-tests.md)、[第七节：功能演示](delivery/week-04-demo.md)。
+第四周：[Week 4 工作清单](delivery/week-04-checklist.md)、[第一节：任务状态机](delivery/week-04-state-machine.md)、[第二节：队列与异步投递](delivery/week-04-queue.md)、[第三节：并发、超时与取消](delivery/week-04-worker-control.md)、[第四节：优雅停止与重启恢复](delivery/week-04-shutdown.md)、[第五节：React 详情页轮询](delivery/week-04-polling.md)、[第六节：测试与验收](delivery/week-04-tests.md)、[第七节：功能演示](delivery/week-04-demo.md)、[第八节：最终交付](delivery/week-04-handoff.md)、[AI 自查](delivery/week-04-review.md)。
